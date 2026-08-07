@@ -577,6 +577,8 @@
   td.buttons .btn-row { display: flex; gap: 4px; justify-content: center; }
   td.buttons .diff-row { margin-top: 3px; text-align: center; }
   .two-line { display: inline-block; line-height: 1.15; text-align: center; vertical-align: middle; }
+  .two-line-split { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; }
+  .two-line-split .tl-top { border-bottom: 1px solid #64748b; padding-bottom: 2px; margin-bottom: 2px; }
   .diff.plus  { color: #16a34a; }
   .diff.minus { color: var(--danger); }
   .diff.zero  { color: #94a3b8; }
@@ -787,7 +789,7 @@
         <th>№</th>
         <th class="sortable" data-table="wh" data-section="parts" data-col="code">Код <span class="sort-arrow">↕</span></th>
         <th class="sortable" data-table="wh" data-section="parts" data-col="name">Наименование <span class="sort-arrow">↕</span></th>
-        <th class="sortable narrow" data-table="wh" data-section="parts" data-col="qty">Склад / 1С <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-wh-parts-qty"></span><span class="merged-total-sep">/</span><span id="total-wh-parts-ocqty"></span></div></th>
+        <th class="sortable narrow" data-table="wh" data-section="parts" data-col="qty"><span class="two-line-split"><span class="tl-top">Склад</span><span class="tl-bot">1С</span></span> <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-wh-parts-qty"></span><span class="merged-total-sep">/</span><span id="total-wh-parts-ocqty"></span></div></th>
         <th></th>
       </tr>
     </thead>
@@ -803,7 +805,7 @@
         <th>№</th>
         <th class="sortable" data-table="wh" data-section="consumables" data-col="code">Код <span class="sort-arrow">↕</span></th>
         <th class="sortable" data-table="wh" data-section="consumables" data-col="name">Наименование <span class="sort-arrow">↕</span></th>
-        <th class="sortable narrow" data-table="wh" data-section="consumables" data-col="qty">Склад / 1С <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-wh-consumables-qty"></span><span class="merged-total-sep">/</span><span id="total-wh-consumables-ocqty"></span></div></th>
+        <th class="sortable narrow" data-table="wh" data-section="consumables" data-col="qty"><span class="two-line-split"><span class="tl-top">Склад</span><span class="tl-bot">1С</span></span> <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-wh-consumables-qty"></span><span class="merged-total-sep">/</span><span id="total-wh-consumables-ocqty"></span></div></th>
         <th></th>
       </tr>
     </thead>
