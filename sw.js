@@ -1,4 +1,4 @@
-const CACHE_NAME = "sklad-cache-v11";
+const CACHE_NAME = "sklad-cache-v13";
 const ASSETS = [
   "./index.html",
   "./manifest.json",

@@ -100,6 +100,16 @@
   .tab-btn:active { background: #e2e8f0; }
   .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
+  /* Верхняя строка шапки (дата + «Экспорт») — одинаковый вид с кнопками вкладок ниже */
+  .head-row .date-picker,
+  .head-row button.util {
+    height: 44px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+  }
+  .head-row .date-picker #dateDisplayText { font-size: 15px; font-weight: 700; }
+
   .view { display: none; }
   .view.active { display: block; }
 
@@ -258,6 +268,7 @@
   th.sortable { cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; white-space: nowrap; }
   th.sortable .sort-arrow { font-size: 11px; opacity: 0.6; margin-left: 3px; }
   th.sortable.sort-active .sort-arrow { opacity: 1; }
+  th.sortable[data-col="count"] { text-align: center; }
   .sort-arrow { display: none; }
   td.count { width: 42px; text-align: center; font-weight: 700; font-size: 17px; }
   td.count input {
@@ -269,22 +280,25 @@
   td.count input::-webkit-inner-spin-button {
     -webkit-appearance: none; margin: 0;
   }
-  /* «Учёт»: объединённая колонка «Шт» — число сверху, под ним –/+ */
+  /* «Учёт»: объединённая колонка «Шт» — 3 яруса: число / «+» / «–» */
   td.count-merged {
-    width: 62px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    padding-top: 6px;
-    padding-bottom: 6px;
+    width: 46px;
+    padding: 0;
+    vertical-align: middle;
   }
-  td.count-merged input { margin: 0 auto; }
-  td.count-merged .ca-stack {
+  .count-tier {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 7px;
+    justify-content: center;
+  }
+  .count-tier + .count-tier { border-top: 1px solid var(--border); }
+  .count-tier-num { padding: 6px 4px; }
+  .count-tier-num input { margin: 0 auto; }
+  .count-tier .btn {
+    width: 100%;
+    height: auto;
+    padding: 7px 0;
+    border-radius: 0;
   }
   td.stock { width: 60px; text-align: center; }
   td.stock input {
@@ -408,8 +422,9 @@
     td.buttons { width: 48px; padding-left: 2px; padding-right: 2px; }
     td.buttons > div { gap: 3px; }
     /* «Учёт»: объединённая колонка «Шт» на мобильном — уже, кнопки чуть меньше */
-    td.count-merged { width: 44px; gap: 5px; padding-top: 4px; padding-bottom: 4px; }
-    td.count-merged .ca-stack { gap: 5px; }
+    td.count-merged { width: 40px; }
+    .count-tier-num { padding: 4px 2px; }
+    .count-tier .btn { padding: 5px 0; }
     .btn { width: 20px; height: 20px; font-size: 11px; border-radius: 5px; }
     .btn.del { font-size: 9px; }
     .btn.edit { font-size: 9px; }
@@ -1364,10 +1379,14 @@ function renderSection(section) {
         <button class="chk-toggle${isChecked ? " on" : ""}" data-section="${section}" data-index="${i}" title="Отметить как учтено">${isChecked ? "✓" : ""}</button>
       </td>
       <td class="count count-merged">
-        <input type="number" min="0" value="${counts[key]}" class="countInput"
-          data-section="${section}" data-index="${i}">
-        <div class="ca-stack">
+        <div class="count-tier count-tier-num">
+          <input type="number" min="0" value="${counts[key]}" class="countInput"
+            data-section="${section}" data-index="${i}">
+        </div>
+        <div class="count-tier count-tier-plus">
           <button class="btn plus" data-section="${section}" data-index="${i}" title="Тап: +1. Зажать: указать количество">+</button>
+        </div>
+        <div class="count-tier count-tier-minus">
           <button class="btn minus" data-section="${section}" data-index="${i}" title="Тап: −1. Зажать: указать количество">–</button>
         </div>
       </td>
@@ -3377,6 +3396,10 @@ function updateOneCTotals(section) {
 const SYNC_TOKEN_KEY = "potreblenie_sync_token_v1";
 const SYNC_GIST_ID_KEY = "potreblenie_sync_gist_id_v1";
 const SYNC_FILENAME = "sklad-sync-data.json";
+// История сохранений — отдельный файл в том же Gist (Gist поддерживает
+// несколько файлов). Так она переживает переустановку приложения и очистку
+// браузера, и видна на всех устройствах одинаково.
+const SYNC_HISTORY_FILENAME = "sklad-sync-history.json";
 // Ждём 10 секунд ПОСЛЕ ПОСЛЕДНЕГО действия, прежде чем отправлять данные на
 // сервер (debounce, не троттлинг): если действия идут одно за другим быстрее,
 // чем раз в 10 секунд, отправка откладывается до паузы. Не зависит от того,
@@ -3513,6 +3536,28 @@ function addSyncHistoryEntry(kind, lines) {
   if (syncHistory.length > SYNC_HISTORY_LIMIT) syncHistory.length = SYNC_HISTORY_LIMIT;
   saveSyncHistoryList();
   renderSyncHistory();
+}
+// Объединяет историю, полученную с сервера (от другого устройства), с тем,
+// что уже есть локально. Записи считаются одинаковыми по паре время+тип —
+// этого достаточно, коллизии между разными устройствами практически
+// невозможны (миллисекундная точность).
+function mergeRemoteHistory(historyFileContent) {
+  if (!historyFileContent) return;
+  let remoteList;
+  try { remoteList = JSON.parse(historyFileContent); } catch (e) { return; }
+  if (!Array.isArray(remoteList) || remoteList.length === 0) return;
+  const seen = new Set(syncHistory.map((e) => e.time + "|" + e.kind));
+  let added = false;
+  remoteList.forEach((entry) => {
+    const sig = entry.time + "|" + entry.kind;
+    if (!seen.has(sig)) { syncHistory.push(entry); seen.add(sig); added = true; }
+  });
+  if (added) {
+    syncHistory.sort((a, b) => b.time - a.time);
+    if (syncHistory.length > SYNC_HISTORY_LIMIT) syncHistory.length = SYNC_HISTORY_LIMIT;
+    saveSyncHistoryList();
+    renderSyncHistory();
+  }
 }
 
 // Ключ позиции для сравнения "было/стало" — так же, как countKey: по коду,
@@ -3699,6 +3744,7 @@ async function pullFromGist(silent) {
   if (!silent) setSyncStatus("syncing", "Загрузка с сервера…");
   try {
     const data = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
+    mergeRemoteHistory(data.files && data.files[SYNC_HISTORY_FILENAME] && data.files[SYNC_HISTORY_FILENAME].content);
     const file = data.files && data.files[SYNC_FILENAME];
     if (!file || !file.content) {
       setSyncStatus("err", "В Gist пока нет данных приложения");
@@ -3739,7 +3785,10 @@ async function pushToGistNow() {
       const created = await githubGistRequest("POST", "https://api.github.com/gists", token, {
         description: "Учёт деталей — Склад (данные приложения)",
         public: false,
-        files: { [SYNC_FILENAME]: { content: JSON.stringify(payload) } }
+        files: {
+          [SYNC_FILENAME]: { content: JSON.stringify(payload) },
+          [SYNC_HISTORY_FILENAME]: { content: JSON.stringify(syncHistory) }
+        }
       });
       localStorage.setItem(SYNC_GIST_ID_KEY, created.id);
       const gistInput = document.getElementById("syncGistIdInput");
@@ -3750,6 +3799,7 @@ async function pushToGistNow() {
     }
     // Сверяем версию на сервере с той, что мы видели в последний раз.
     const remote = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
+    mergeRemoteHistory(remote.files && remote.files[SYNC_HISTORY_FILENAME] && remote.files[SYNC_HISTORY_FILENAME].content);
     const remoteFile = remote.files && remote.files[SYNC_FILENAME];
     const remotePayload = (remoteFile && remoteFile.content) ? JSON.parse(remoteFile.content) : null;
     const lastSynced = getLastSyncedAt();
@@ -3762,7 +3812,10 @@ async function pushToGistNow() {
     }
 
     await githubGistRequest("PATCH", "https://api.github.com/gists/" + gistId, token, {
-      files: { [SYNC_FILENAME]: { content: JSON.stringify(payload) } }
+      files: {
+        [SYNC_FILENAME]: { content: JSON.stringify(payload) },
+        [SYNC_HISTORY_FILENAME]: { content: JSON.stringify(syncHistory) }
+      }
     });
     markSyncedTo(payload.updatedAt, payload, "push");
     setSyncStatus("ok", "Синхронизировано: " + new Date().toLocaleTimeString().slice(0, 5));
@@ -3806,7 +3859,10 @@ document.getElementById("syncConflictKeepLocal").addEventListener("click", async
   try {
     setSyncStatus("syncing", "Сохранение вашей версии…");
     await githubGistRequest("PATCH", "https://api.github.com/gists/" + gistId, token, {
-      files: { [SYNC_FILENAME]: { content: JSON.stringify(payload) } }
+      files: {
+        [SYNC_FILENAME]: { content: JSON.stringify(payload) },
+        [SYNC_HISTORY_FILENAME]: { content: JSON.stringify(syncHistory) }
+      }
     });
     markSyncedTo(payload.updatedAt, payload, "push");
     setSyncStatus("ok", "Синхронизировано: " + new Date().toLocaleTimeString().slice(0, 5));
