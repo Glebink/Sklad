@@ -313,12 +313,31 @@
   td.readout { width: 58px; text-align: center; font-size: 14px; font-weight: 700; }
   td.readout.low { color: var(--danger); }
 
+  /* «Склад»: объединённая колонка «Склад / 1С» — 2 яруса, как «Шт» в «Учёте»:
+     сверху — редактируемое количество на складе, снизу — остаток из 1С (только чтение). */
+  td.wh-merged { width: 62px; }
+  td.wh-merged .count-tier-num { padding: 4px 2px; }
+  td.wh-merged .count-tier-num input {
+    width: 54px; padding: 3px 2px; font-size: 15px; font-weight: 700; text-align: center;
+    border: 1px solid var(--border); border-radius: 6px;
+    -moz-appearance: textfield; appearance: textfield;
+  }
+  td.wh-merged .count-tier-num input::-webkit-outer-spin-button,
+  td.wh-merged .count-tier-num input::-webkit-inner-spin-button {
+    -webkit-appearance: none; margin: 0;
+  }
+  .count-tier-oc { padding: 5px 2px; font-size: 14px; font-weight: 700; color: #475569; }
+  .merged-total { display: flex; align-items: center; justify-content: center; gap: 3px; }
+  .merged-total-sep { opacity: 0.5; font-weight: 400; }
+
   td.buttons { width: 68px; white-space: nowrap; }
   td.buttons > div {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: 4px;
   }
+  td.buttons.wh-buttons { width: 40px; text-align: center; }
+  td.buttons.wh-buttons > .menu-wrap { display: block; }
   .btn {
     width: 27px; height: 27px; border-radius: 6px; border: none;
     font-size: 15px; font-weight: 700; color: #fff; cursor: pointer; line-height: 1;
@@ -421,10 +440,16 @@
     .col-total { font-size: 9px; }
     td.buttons { width: 48px; padding-left: 2px; padding-right: 2px; }
     td.buttons > div { gap: 3px; }
+    td.buttons.wh-buttons { width: 30px; }
+    td.buttons.wh-buttons .wh-menu-btn { width: 26px; height: 26px; font-size: 15px; }
     /* «Учёт»: объединённая колонка «Шт» на мобильном — уже, кнопки чуть меньше */
     td.count-merged { width: 40px; }
     .count-tier-num { padding: 4px 2px; }
     .count-tier .btn { padding: 5px 0; }
+    /* «Склад»: объединённая колонка «Склад / 1С» на мобильном */
+    td.wh-merged { width: 40px; }
+    td.wh-merged .count-tier-num input { width: auto; min-width: 26px; font-size: 16px; padding: 2px 1px; }
+    .count-tier-oc { font-size: 11px; padding: 3px 1px; }
     .btn { width: 20px; height: 20px; font-size: 11px; border-radius: 5px; }
     .btn.del { font-size: 9px; }
     .btn.edit { font-size: 9px; }
@@ -762,9 +787,8 @@
         <th>№</th>
         <th class="sortable" data-table="wh" data-section="parts" data-col="code">Код <span class="sort-arrow">↕</span></th>
         <th class="sortable" data-table="wh" data-section="parts" data-col="name">Наименование <span class="sort-arrow">↕</span></th>
-        <th class="sortable narrow" data-table="wh" data-section="parts" data-col="qty">На складе <span class="sort-arrow">↕</span><div class="col-total" id="total-wh-parts-qty"></div></th>
-        <th class="sortable narrow" data-table="wh" data-section="parts" data-col="ocqty">1C остаток <span class="sort-arrow">↕</span><div class="col-total" id="total-wh-parts-ocqty"></div></th>
-        <th>✏️</th>
+        <th class="sortable narrow" data-table="wh" data-section="parts" data-col="qty">Склад / 1С <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-wh-parts-qty"></span><span class="merged-total-sep">/</span><span id="total-wh-parts-ocqty"></span></div></th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="wh-body-parts"></tbody>
@@ -779,9 +803,8 @@
         <th>№</th>
         <th class="sortable" data-table="wh" data-section="consumables" data-col="code">Код <span class="sort-arrow">↕</span></th>
         <th class="sortable" data-table="wh" data-section="consumables" data-col="name">Наименование <span class="sort-arrow">↕</span></th>
-        <th class="sortable narrow" data-table="wh" data-section="consumables" data-col="qty">На складе <span class="sort-arrow">↕</span><div class="col-total" id="total-wh-consumables-qty"></div></th>
-        <th class="sortable narrow" data-table="wh" data-section="consumables" data-col="ocqty">1C остаток <span class="sort-arrow">↕</span><div class="col-total" id="total-wh-consumables-ocqty"></div></th>
-        <th>✏️</th>
+        <th class="sortable narrow" data-table="wh" data-section="consumables" data-col="qty">Склад / 1С <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-wh-consumables-qty"></span><span class="merged-total-sep">/</span><span id="total-wh-consumables-ocqty"></span></div></th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="wh-body-consumables"></tbody>
@@ -2064,16 +2087,21 @@ function renderWarehouseSection(section) {
       <td class="num">${i + 1}</td>
       <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
       <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${ocInfo ? altNameHtml(item.code, ocInfo, true) : ""}</td>
-      <td class="stock">
-        <input type="number" min="0" value="${item.qty || 0}" class="whQtyInput"
-          data-section="${section}" data-index="${i}">
+      <td class="count-merged wh-merged">
+        <div class="count-tier count-tier-num">
+          <input type="number" min="0" value="${item.qty || 0}" class="whQtyInput"
+            data-section="${section}" data-index="${i}">
+        </div>
+        <div class="count-tier count-tier-oc">${ocInfo ? ocInfo.qty : "—"}</div>
       </td>
-      <td class="readout">${ocInfo ? ocInfo.qty : "—"}</td>
-      <td class="buttons">
-        <div>
-          <button class="btn edit wh-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
-          <button class="btn history wh-history" data-section="${section}" data-index="${i}" title="История выдачи">🕘</button>
-          <button class="btn del wh-del" data-section="${section}" data-index="${i}" title="Удалить со склада">✕</button>
+      <td class="buttons wh-buttons">
+        <div class="menu-wrap wh-menu-wrap">
+          <button class="iconbtn wh-menu-btn" data-section="${section}" data-index="${i}" title="Действия">⋮</button>
+          <div class="menu-panel wh-menu-panel">
+            <button class="wh-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
+            <button class="wh-history" data-section="${section}" data-index="${i}" title="История выдачи">🕘</button>
+            <button class="wh-del danger" data-section="${section}" data-index="${i}" title="Удалить со склада">✕</button>
+          </div>
         </div>
       </td>
     </tr>`;
@@ -2087,11 +2115,25 @@ function renderWarehouseAll() {
   renderWarehouseSection("consumables");
 }
 
+function closeAllWhMenus(except) {
+  document.querySelectorAll(".wh-menu-panel.open").forEach((p) => {
+    if (p !== except) p.classList.remove("open");
+  });
+}
 function handleWarehouseClick(e) {
   const section = e.currentTarget.id.replace("wh-body-", "");
   const btn = e.target.closest("button");
   if (btn) {
     const index = parseInt(btn.dataset.index, 10);
+    if (btn.classList.contains("wh-menu-btn")) {
+      e.stopPropagation();
+      const panel = btn.parentElement.querySelector(".wh-menu-panel");
+      const willOpen = !panel.classList.contains("open");
+      closeAllWhMenus();
+      panel.classList.toggle("open", willOpen);
+      return;
+    }
+    closeAllWhMenus();
     if (btn.classList.contains("wh-del")) {
       openConfirmWarehouse(section, index);
     } else if (btn.classList.contains("wh-edit")) {
@@ -2117,6 +2159,10 @@ function handleWarehouseClick(e) {
 }
 document.getElementById("wh-body-parts").addEventListener("click", handleWarehouseClick);
 document.getElementById("wh-body-consumables").addEventListener("click", handleWarehouseClick);
+document.addEventListener("click", (e) => {
+  if (e.target.closest(".wh-menu-wrap")) return;
+  closeAllWhMenus();
+});
 
 function handleWarehouseQtyEdit(e) {
   const input = e.target.closest(".whQtyInput");
