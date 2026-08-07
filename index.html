@@ -1190,7 +1190,9 @@ function saveClipboard() {
 let dataByDate = loadDataByDate();
 let warehouse = loadWarehouse(); // { parts: [{code,name,qty}], consumables: [...] }
 let clipboardDay = loadClipboard(); // { parts:[{name,code}], consumables:[...] } | null
-let currentDate = localStorage.getItem(LAST_DATE_KEY) || todayStr();
+// Дата при каждом открытии приложения — всегда сегодняшняя (а не та, на которой
+// остановились в прошлый раз): открыли на следующий день — календарь сам на нём.
+let currentDate = todayStr();
 
 function entryFor(date) {
   if (!dataByDate[date]) {
@@ -1526,8 +1528,20 @@ function handleCountEdit(e) {
   const item = itemAt(section, index);
   if (!item) return;
   const key = countKey(section, item);
-  let val = parseInt(input.value, 10);
-  if (isNaN(val) || val < 0) val = 0;
+  const raw = input.value.trim();
+  let val = parseInt(raw, 10);
+  if (raw === "" || isNaN(val) || val <= 0) {
+    // Стёрли количество (или поставили 0) — позиция целиком удаляется
+    // из списка, как и при списании кнопкой «–» до нуля.
+    pushHistory();
+    sections[section].splice(index, 1);
+    delete counts[key];
+    delete checked[key];
+    selectedCA[section].delete(key);
+    persistCurrent();
+    renderSection(section);
+    return;
+  }
   pushHistory();
   counts[key] = val;
   persistCurrent();
@@ -1607,11 +1621,21 @@ qtyAdjustInput.addEventListener("keydown", (e) => {
    теперь происходит автоматически при списании количества до 0, см. applyQtyAdjust) ==================== */
 let pendingDelete = null; // { kind: 'reset'|'warehouse'|'whReset'|'onec'|'deleteAll', section, index }
 
+/* ==================== Подтверждение удаления/обнуления (общее для 3 вкладок) ====================
+   Раньше у каждого вида удаления (склад, 1С, обнулить учёт, обнулить склад,
+   удалить всё) была своя копия «записать pendingDelete → показать текст →
+   открыть модалку», а обработчик «Да» разруливал их через 5 почти
+   одинаковых if. Теперь одна функция открытия + один конфиг действий. */
+function openConfirmDelete(kind, text, section, index) {
+  pendingDelete = { kind, section, index };
+  document.getElementById("confirmText").textContent = text;
+  document.getElementById("confirmOverlay").classList.add("open");
+}
 function openConfirmWarehouse(section, index) {
   const item = warehouse[section][index];
-  pendingDelete = { kind: "warehouse", section, index };
-  document.getElementById("confirmText").textContent = `Удалить «${item.name}» (${item.code}) со склада? Прошлые записи в учёте сохранятся, но перестанут быть связаны со складом.`;
-  document.getElementById("confirmOverlay").classList.add("open");
+  openConfirmDelete("warehouse",
+    `Удалить «${item.name}» (${item.code}) со склада? Прошлые записи в учёте сохранятся, но перестанут быть связаны со складом.`,
+    section, index);
 }
 function closeConfirm() {
   pendingDelete = null;
@@ -1621,27 +1645,25 @@ document.getElementById("confirmNo").addEventListener("click", closeConfirm);
 document.getElementById("confirmOverlay").addEventListener("click", (e) => {
   if (e.target.id === "confirmOverlay") closeConfirm();
 });
-document.getElementById("confirmYes").addEventListener("click", () => {
-  if (!pendingDelete) return;
-  if (pendingDelete.kind === "reset") {
+
+// Что делает каждый вид подтверждения. pendingDelete доступен внутри
+// (section/index — если действие точечное, для «обнулить»/«удалить всё» не нужны).
+const DELETE_ACTIONS = {
+  reset: () => {
     pushHistory();
     Object.keys(counts).forEach((k) => { counts[k] = 0; });
     persistCurrent();
     renderAll();
-    closeConfirm();
-    return;
-  }
-  if (pendingDelete.kind === "whReset") {
+  },
+  whReset: () => {
     pushWhHistory();
     ["parts", "consumables"].forEach((sec) => {
       warehouse[sec].forEach((it) => { it.qty = 0; });
     });
     saveWarehouse();
     renderWarehouseAll();
-    closeConfirm();
-    return;
-  }
-  if (pendingDelete.kind === "warehouse") {
+  },
+  warehouse: () => {
     pushWhHistory();
     const { section, index } = pendingDelete;
     const item = warehouse[section][index];
@@ -1650,19 +1672,15 @@ document.getElementById("confirmYes").addEventListener("click", () => {
     selectedWH[section].delete(key);
     saveWarehouse();
     renderWarehouseAll();
-    closeConfirm();
-    return;
-  }
-  if (pendingDelete.kind === "onec") {
+  },
+  onec: () => {
     pushOcHistory();
     const { section, index } = pendingDelete;
     onec[section].splice(index, 1);
     saveOneC();
     renderOneCAll();
-    closeConfirm();
-    return;
-  }
-  if (pendingDelete.kind === "deleteAll") {
+  },
+  deleteAll: () => {
     pushHistory();
     sections.parts = [];
     sections.consumables = [];
@@ -1672,59 +1690,68 @@ document.getElementById("confirmYes").addEventListener("click", () => {
     selectedCA.consumables.clear();
     persistCurrent();
     renderAll();
-    closeConfirm();
-    return;
-  }
+  },
+};
+document.getElementById("confirmYes").addEventListener("click", () => {
+  if (!pendingDelete) return;
+  const action = DELETE_ACTIONS[pendingDelete.kind];
+  if (action) action();
   closeConfirm();
 });
 
 document.getElementById("resetBtn").addEventListener("click", () => {
-  pendingDelete = { kind: "reset" };
-  document.getElementById("confirmText").textContent = `Обнулить все счётчики за ${formatFull(currentDate)}?`;
-  document.getElementById("confirmOverlay").classList.add("open");
+  openConfirmDelete("reset", `Обнулить все счётчики за ${formatFull(currentDate)}?`);
 });
 document.getElementById("deleteAllBtn").addEventListener("click", () => {
-  pendingDelete = { kind: "deleteAll" };
-  document.getElementById("confirmText").textContent = `Удалить ВСЕ позиции (детали и расходники) за ${formatFull(currentDate)}? Счётчики и сами строки будут стёрты полностью. Это можно отменить кнопкой ↶.`;
-  document.getElementById("confirmOverlay").classList.add("open");
+  openConfirmDelete("deleteAll",
+    `Удалить ВСЕ позиции (детали и расходники) за ${formatFull(currentDate)}? Счётчики и сами строки будут стёрты полностью. Это можно отменить кнопкой ↶.`);
 });
 
-/* ==================== Поиск по складу (автоподбор для панелей добавления/редактирования) ==================== */
-function searchWarehouse(query) {
+/* ==================== Поиск по складу/1С (автоподбор для панелей добавления/редактирования) ====================
+   Раньше searchWarehouse/searchOneC и renderSuggestions/renderOneCSuggestions
+   были парами почти одинаковых функций — отличались только тем, в каком
+   хранилище искать и что написать, если совпадений нет. Теперь один общий
+   поиск и один общий рендер подсказок с этими двумя как параметрами. */
+function searchStore(store, query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
   const results = [];
   ["parts", "consumables"].forEach((section) => {
-    warehouse[section].forEach((item) => {
-      if (item.name.toLowerCase().includes(q) || item.code.toLowerCase().includes(q)) {
-        results.push({ section, code: item.code, name: item.name });
+    store[section].forEach((item) => {
+      const name = (item.name || "").toLowerCase();
+      const code = (item.code || "").toLowerCase();
+      if (name.includes(q) || code.includes(q)) {
+        results.push({ section, code: item.code || "", name: item.name });
       }
     });
   });
   return results.slice(0, 8);
 }
-function renderSuggestions(box, query, onPick) {
-  const results = searchWarehouse(query);
+function renderSuggestionsFrom(box, query, onPick, store, emptyText) {
+  const results = searchStore(store, query);
   if (!query.trim()) { box.classList.remove("open"); box.innerHTML = ""; return; }
   if (results.length === 0) {
-    box.innerHTML = `<div class="suggest-empty">Совпадений на складе нет — можно добавить как новую позицию без кода.</div>`;
+    box.innerHTML = `<div class="suggest-empty">${emptyText}</div>`;
     box.classList.add("open");
     return;
   }
   box.innerHTML = results.map((r, idx) =>
     `<div class="suggest-item" data-idx="${idx}">
-       <span class="code">${escapeHtml(r.code)}</span> — ${escapeHtml(r.name)}
+       <span class="code">${escapeHtml(r.code || "—")}</span> — ${escapeHtml(r.name)}
      </div>`
   ).join("");
   box.classList.add("open");
   Array.from(box.querySelectorAll(".suggest-item")).forEach((el) => {
     el.addEventListener("click", () => {
-      const r = results[parseInt(el.dataset.idx, 10)];
-      onPick(r);
+      onPick(results[parseInt(el.dataset.idx, 10)]);
       box.classList.remove("open");
       box.innerHTML = "";
     });
   });
+}
+function renderSuggestions(box, query, onPick) {
+  renderSuggestionsFrom(box, query, onPick, warehouse,
+    "Совпадений на складе нет — можно добавить как новую позицию без кода.");
 }
 
 /* --- Добавление новой позиции в дневной список --- */
@@ -2215,9 +2242,11 @@ function switchTab(target) {
   //    вкладка уже переключилась и экран не «залипнет».
   try {
     showSearchBarFor(target);
-    // дата относится только к «Учёту» — на других вкладках прячем,
-    // но место сохраняем, чтобы заголовок не прыгал
-    document.getElementById("datePickerBox").classList.toggle("hidden", target !== "consumption");
+    // Дата-пикер теперь виден на всех вкладках — шапка одинаковая
+    // везде (сам он всегда управляет датой «Учёта», даже если открыта
+    // «Склад»/«1С» — эти вкладки от даты не зависят, так что показ поля
+    // им не мешает).
+
 
     if (backTarget && target !== backTarget.dest) hideBackBtn();
     if (target === "warehouse") renderWarehouseAll();
@@ -2744,10 +2773,9 @@ document.getElementById("oc-body-consumables").addEventListener("change", handle
 /* --- удаление позиции 1C --- */
 function openConfirmOneC(section, index) {
   const item = onec[section][index];
-  pendingDelete = { kind: "onec", section, index };
-  document.getElementById("confirmText").textContent =
-    `Удалить «${item.name}» (${item.code || "без кода"}) из справочника 1C?`;
-  document.getElementById("confirmOverlay").classList.add("open");
+  openConfirmDelete("onec",
+    `Удалить «${item.name}» (${item.code || "без кода"}) из справочника 1C?`,
+    section, index);
 }
 
 /* --- редактирование позиции 1C --- */
@@ -2834,45 +2862,11 @@ document.getElementById("ocAddBtn").addEventListener("click", () => {
 
 
 /* ==================== Подсказки из 1C для вкладки «Склад» ====================
-   Работают как автоподсказка склада в «Учёте», но источник — справочник 1C.
-   Искать можно и по названию, и по коду. */
-function searchOneC(query) {
-  const q = query.trim().toLowerCase();
-  if (!q) return [];
-  const results = [];
-  ["parts", "consumables"].forEach((section) => {
-    onec[section].forEach((item) => {
-      const name = (item.name || "").toLowerCase();
-      const code = (item.code || "").toLowerCase();
-      if (name.includes(q) || code.includes(q)) {
-        results.push({ section, code: item.code || "", name: item.name });
-      }
-    });
-  });
-  return results.slice(0, 8);
-}
-
+   Работают как автоподсказка склада в «Учёте» (см. searchStore/renderSuggestionsFrom
+   выше), но источник — справочник 1C. Искать можно и по названию, и по коду. */
 function renderOneCSuggestions(box, query, onPick) {
-  const results = searchOneC(query);
-  if (!query.trim()) { box.classList.remove("open"); box.innerHTML = ""; return; }
-  if (results.length === 0) {
-    box.innerHTML = `<div class="suggest-empty">В 1C совпадений нет — можно добавить позицию вручную.</div>`;
-    box.classList.add("open");
-    return;
-  }
-  box.innerHTML = results.map((r, idx) =>
-    `<div class="suggest-item" data-idx="${idx}">
-       <span class="code">${escapeHtml(r.code || "—")}</span> — ${escapeHtml(r.name)}
-     </div>`
-  ).join("");
-  box.classList.add("open");
-  Array.from(box.querySelectorAll(".suggest-item")).forEach((el) => {
-    el.addEventListener("click", () => {
-      onPick(results[parseInt(el.dataset.idx, 10)]);
-      box.classList.remove("open");
-      box.innerHTML = "";
-    });
-  });
+  renderSuggestionsFrom(box, query, onPick, onec,
+    "В 1C совпадений нет — можно добавить позицию вручную.");
 }
 
 /* --- панель добавления позиции на склад --- */
@@ -3154,10 +3148,8 @@ const whHistory = makeUndoRedo({
 function pushWhHistory() { whHistory.push(); }
 document.getElementById("whResetBtn").addEventListener("click", () => {
   const total = warehouse.parts.length + warehouse.consumables.length;
-  pendingDelete = { kind: "whReset" };
-  document.getElementById("confirmText").textContent =
-    `Обнулить количество у всех позиций склада (${total} шт.)? Сами позиции останутся, можно отменить кнопкой ↶.`;
-  document.getElementById("confirmOverlay").classList.add("open");
+  openConfirmDelete("whReset",
+    `Обнулить количество у всех позиций склада (${total} шт.)? Сами позиции останутся, можно отменить кнопкой ↶.`);
 });
 
 
