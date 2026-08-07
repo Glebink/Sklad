@@ -680,6 +680,7 @@
     <input type="date" id="reportDate">
   </div>
   <button class="util primary" id="exportBtn">⬇ Экспорт</button>
+  <button class="util" id="syncHistoryBtn" title="История сохранений">🕘 История</button>
   <div class="head-row-spacer" aria-hidden="true"></div>
 </div>
 
@@ -1039,6 +1040,12 @@
       конфликте автоматически проигрывает и без вопросов подтягивает версию с сервера. Также само периодически
       проверяет сервер, пока открыто.
     </div>
+    <div class="field-label">Пароль настроек синхронизации</div>
+    <button class="btn" id="syncPwBtn" style="width:100%;">Задать / изменить пароль</button>
+    <div class="sync-help" style="margin-top:4px;">
+      Без пароля это меню не откроется (долгое нажатие на облачко). Короткое нажатие пароль не спрашивает —
+      оно просто отправляет/забирает данные согласно роли устройства.
+    </div>
     <div class="field-label">GitHub-токен (только с правом «gist»)</div>
     <input type="password" id="syncTokenInput" placeholder="ghp_...">
     <div class="field-label">ID Gist (оставьте пустым — создастся новый)</div>
@@ -1050,9 +1057,6 @@
     <div class="modal-actions" style="margin-top:6px;">
       <button class="confirm-no" id="syncPullBtn" style="background:#e2e8f0;">⇩ Обновить с сервера</button>
       <button class="confirm-no" id="syncForgetBtn" style="background:#fecaca;">Отключить</button>
-    </div>
-    <div class="modal-actions" style="margin-top:6px;">
-      <button class="confirm-no" id="syncHistoryBtn" style="background:#e2e8f0; width:100%;">🕘 История сохранений</button>
     </div>
     <div class="sync-help">
       Как получить токен:
@@ -1096,8 +1100,7 @@
     </div>
     <div id="syncHistoryList" class="sync-history-list"></div>
     <div class="modal-actions" style="margin-top:10px;">
-      <button class="confirm-no" id="syncHistoryClearBtn" style="background:#fecaca;">Очистить историю</button>
-      <button class="confirm-yes" id="syncHistoryClose" style="background: var(--accent);">Закрыть</button>
+      <button class="confirm-yes" id="syncHistoryClose" style="background: var(--accent); width:100%;">Закрыть</button>
     </div>
   </div>
 </div>
@@ -3452,6 +3455,38 @@ const SYNC_GIST_ID_KEY = "potreblenie_sync_gist_id_v1";
 // сервера и вдобавок сам периодически проверяет сервер, пока открыто.
 const SYNC_PRIMARY_KEY = "potreblenie_sync_primary_v1";
 function isPrimaryDevice() { return localStorage.getItem(SYNC_PRIMARY_KEY) === "1"; }
+const SYNC_SETTINGS_PW_KEY = "potreblenie_sync_settings_pw_v1";
+function getSyncPassword() { return localStorage.getItem(SYNC_SETTINGS_PW_KEY) || ""; }
+function setSyncPassword(pw) { localStorage.setItem(SYNC_SETTINGS_PW_KEY, pw); }
+function changeSyncPassword() {
+  const current = getSyncPassword();
+  if (current) {
+    const entered = prompt("Текущий пароль:");
+    if (entered === null) return;
+    if (entered !== current) { alert("Неверный пароль."); return; }
+  }
+  const next = prompt(current ? "Новый пароль:" : "Задайте пароль для настроек синхронизации:");
+  if (next === null) return;
+  if (!next.trim()) { alert("Пароль не может быть пустым."); return; }
+  setSyncPassword(next.trim());
+  alert("Пароль сохранён.");
+}
+function verifySyncPassword() {
+  const stored = getSyncPassword();
+  if (!stored) return true; // пароль ещё не задан — доступ без проверки
+  const entered = prompt("Пароль настроек синхронизации:");
+  if (entered === null) return false;
+  if (entered !== stored) { alert("Неверный пароль."); return false; }
+  return true;
+}
+function openSyncModalGated() {
+  if (!verifySyncPassword()) return;
+  openSyncModal();
+}
+function quickSyncAction() {
+  if (!isSyncConfigured()) { openSyncModalGated(); return; }
+  if (isPrimaryDevice()) pushToGistNow(); else pullFromGist();
+}
 // Гостевой режим: синхронизация настроена, но это устройство не главное —
 // на вкладке «Учёт» скрываем +/- и добавление, оставляем только список с поиском.
 function isGuestMode() { return isSyncConfigured() && !isPrimaryDevice(); }
@@ -3460,19 +3495,19 @@ function updateGuestModeUI() {
   if (panel) panel.style.display = isGuestMode() ? "none" : "";
   renderAll();
 }
-const SECONDARY_POLL_MS = 20000; // как часто подчинённое устройство само проверяет сервер
+const SECONDARY_POLL_MS = 30000; // как часто подчинённое устройство само проверяет сервер
 let secondaryPollTimer = null;
 const SYNC_FILENAME = "sklad-sync-data.json";
 // История сохранений — отдельный файл в том же Gist (Gist поддерживает
 // несколько файлов). Так она переживает переустановку приложения и очистку
 // браузера, и видна на всех устройствах одинаково.
 const SYNC_HISTORY_FILENAME = "sklad-sync-history.json";
-// Ждём 10 секунд ПОСЛЕ ПОСЛЕДНЕГО действия, прежде чем отправлять данные на
+// Ждём 60 секунд ПОСЛЕ ПОСЛЕДНЕГО действия, прежде чем отправлять данные на
 // сервер (debounce, не троттлинг): если действия идут одно за другим быстрее,
-// чем раз в 10 секунд, отправка откладывается до паузы. Не зависит от того,
+// чем раз в минуту, отправка откладывается до паузы. Не зависит от того,
 // остаётесь вы в приложении или закрываете его — при уходе (см. flushSyncNow)
 // несохранённые правки всё равно отправляются немедленно.
-const SYNC_DEBOUNCE_MS = 10000;
+const SYNC_DEBOUNCE_MS = 20000;
 // "Отметки времени", по которым мы понимаем, кто последний менял данные —
 // это устройство или сервер (см. подробное объяснение в конце файла / в чате).
 const LOCAL_UPDATED_AT_KEY = "potreblenie_local_updated_v1";
@@ -4020,7 +4055,34 @@ function openSyncModal() {
 function closeSyncModal() {
   document.getElementById("syncOverlay").classList.remove("open");
 }
-document.getElementById("syncBtn").addEventListener("click", openSyncModal);
+(function setupSyncBtnPress() {
+  const btn = document.getElementById("syncBtn");
+  let timer = null, longFired = false, startX = 0, startY = 0;
+  function clearTimer() { if (timer) { clearTimeout(timer); timer = null; } }
+  btn.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    longFired = false;
+    startX = e.clientX; startY = e.clientY;
+    clearTimer();
+    timer = setTimeout(() => {
+      longFired = true; timer = null;
+      if (navigator.vibrate) navigator.vibrate(15);
+      openSyncModalGated();
+    }, LONG_PRESS_MS);
+  });
+  btn.addEventListener("pointermove", (e) => {
+    if (!timer) return;
+    if (Math.abs(e.clientX - startX) > LONG_PRESS_MOVE_TOLERANCE || Math.abs(e.clientY - startY) > LONG_PRESS_MOVE_TOLERANCE) clearTimer();
+  });
+  btn.addEventListener("pointerup", () => {
+    const hadTimer = !!timer;
+    clearTimer();
+    if (hadTimer && !longFired) quickSyncAction();
+  });
+  btn.addEventListener("pointercancel", clearTimer);
+  btn.addEventListener("contextmenu", (e) => e.preventDefault());
+})();
+document.getElementById("syncPwBtn").addEventListener("click", changeSyncPassword);
 document.getElementById("syncClose").addEventListener("click", closeSyncModal);
 document.getElementById("syncOverlay").addEventListener("click", (e) => {
   if (e.target.id === "syncOverlay") closeSyncModal();
@@ -4064,12 +4126,6 @@ document.getElementById("syncHistoryClose").addEventListener("click", () => {
 });
 document.getElementById("syncHistoryOverlay").addEventListener("click", (e) => {
   if (e.target.id === "syncHistoryOverlay") document.getElementById("syncHistoryOverlay").classList.remove("open");
-});
-document.getElementById("syncHistoryClearBtn").addEventListener("click", () => {
-  if (!confirm("Очистить историю сохранений на этом устройстве? Сами данные (склад, учёт, 1С) не затрагиваются.")) return;
-  syncHistory = [];
-  saveSyncHistoryList();
-  renderSyncHistory();
 });
 document.getElementById("syncForgetBtn").addEventListener("click", () => {
   if (!confirm("Отключить синхронизацию на этом устройстве? Токен и ID Gist будут забыты (сами данные в Gist останутся).")) return;
