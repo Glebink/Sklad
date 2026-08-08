@@ -325,6 +325,8 @@
     -webkit-appearance: none; margin: 0;
   }
   .count-tier-oc { padding: 5px 2px; font-size: 14px; font-weight: 700; color: #475569; }
+  .count-tier-diff { padding: 4px 2px; }
+  .count-tier-diff .diff { display: block; }
   .merged-total { display: flex; align-items: center; justify-content: center; gap: 3px; }
   .merged-total-sep { opacity: 0.5; font-weight: 400; }
 
@@ -452,6 +454,8 @@
     td.wh-merged { width: 40px; }
     td.wh-merged .count-tier-num input { width: auto; min-width: 26px; font-size: 16px; padding: 2px 1px; }
     .count-tier-oc { font-size: 11px; padding: 3px 1px; }
+    .count-tier-diff { padding: 2px 1px; }
+    .count-tier-diff .diff { font-size: 11px; }
     .btn { width: 20px; height: 20px; font-size: 11px; border-radius: 5px; }
     .btn.del { font-size: 9px; }
     .btn.edit { font-size: 9px; }
@@ -2749,12 +2753,13 @@ function renderOneCSection(section) {
     return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
       <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
       <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${altNameHtml(item.code, whInfo, true)}</td>
-      <td class="count-merged wh-merged">
+      <td class="count-merged wh-merged three-tier">
         <div class="count-tier count-tier-num">
           <input type="number" min="0" value="${item.qty || 0}" class="ocQtyInput"
             data-section="${section}" data-index="${i}">
         </div>
         <div class="count-tier count-tier-oc">${whInfo ? whInfo.qty : "—"}</div>
+        <div class="count-tier count-tier-diff"><span class="diff ${diff === null ? "" : (diff > 0 ? "plus" : (diff < 0 ? "minus" : "zero"))}">${diff === null ? "" : (diff > 0 ? "+" + diff : diff)}</span></div>
       </td>
       <td class="buttons oc-buttons">
         <div class="menu-wrap oc-menu-wrap">
@@ -2764,9 +2769,6 @@ function renderOneCSection(section) {
             ${whInfo ? "" : `<button class="oc-addwh" data-section="${section}" data-index="${i}" title="Добавить эту позицию на склад">+</button>`}
             <button class="oc-del danger" data-section="${section}" data-index="${i}" title="Удалить из 1C">✕</button>
           </div>
-        </div>
-        <div class="diff-row">
-          <span class="diff ${diff === null ? "" : (diff > 0 ? "plus" : (diff < 0 ? "minus" : "zero"))}">${diff === null ? "" : (diff > 0 ? "+" + diff : diff)}</span>
         </div>
       </td>
     </tr>`;
