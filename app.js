@@ -108,6 +108,11 @@ function saveWarehouse() {
   try { localStorage.setItem(WAREHOUSE_KEY, JSON.stringify(warehouse)); } catch (e) {}
   scheduleSync();
 }
+// Локально, без синхронизации — для чисто визуальных действий (сортировка),
+// которые не должны считаться правкой данных и уходить на сервер.
+function saveWarehouseLocalOnly() {
+  try { localStorage.setItem(WAREHOUSE_KEY, JSON.stringify(warehouse)); } catch (e) {}
+}
 function loadClipboard() {
   try {
     const raw = localStorage.getItem(CLIPBOARD_KEY);
@@ -142,6 +147,12 @@ let checked = entryFor(currentDate).checked;
 function persistCurrent() {
   dataByDate[currentDate] = { sections, counts, checked };
   saveDataByDate();
+}
+// Локально, без синхронизации — используется при переключении даты
+// (сохраняем то, что уже было введено, но само переключение — не правка).
+function persistCurrentLocalOnly() {
+  dataByDate[currentDate] = { sections, counts, checked };
+  try { localStorage.setItem(DATA_BY_DATE_KEY, JSON.stringify(dataByDate)); } catch (e) {}
 }
 
 /* ==================== Общий механизм отмены/повтора (для всех 3 вкладок) ====================
@@ -915,10 +926,9 @@ dateInput.value = currentDate;
 dateInput.addEventListener("change", () => {
   const newDate = dateInput.value;
   if (!newDate || newDate === currentDate) return;
-  persistCurrent();
+  persistCurrentLocalOnly();
   currentDate = newDate;
   localStorage.setItem(LAST_DATE_KEY, currentDate);
-  scheduleSync();
   const entry = entryFor(currentDate);
   sections = entry.sections;
   counts = entry.counts;
@@ -1280,13 +1290,13 @@ function sortTable(table, section, col) {
     return dir === "asc" ? cmp : -cmp;
   });
   if (table === "ca") {
-    persistCurrent();
+    persistCurrentLocalOnly();
     renderSection(section);
   } else if (table === "oc") {
-    saveOneC();
+    saveOneCLocalOnly();
     renderOneCSection(section);
   } else {
-    saveWarehouse();
+    saveWarehouseLocalOnly();
     renderWarehouseSection(section);
   }
   updateSortArrows(table, section);
@@ -1452,6 +1462,10 @@ function loadOneC() {
 function saveOneC() {
   try { localStorage.setItem(ONEC_KEY, JSON.stringify(onec)); } catch (e) {}
   scheduleSync();
+}
+// Локально, без синхронизации — та же логика, что у saveWarehouseLocalOnly.
+function saveOneCLocalOnly() {
+  try { localStorage.setItem(ONEC_KEY, JSON.stringify(onec)); } catch (e) {}
 }
 let onec = loadOneC();
 
@@ -1640,7 +1654,11 @@ function renderOneCSection(section) {
     const diff = whInfo ? whInfo.qty - (item.qty || 0) : null;
     return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
       <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
-      <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${altNameHtml(item.code, whInfo, true)}</td>
+      <td class="name">
+        <div class="main-name">${escapeHtml(item.name)}</div>
+        ${altNameHtml(item.code, whInfo, true)}
+        ${whInfo ? "" : `<button class="oc-addwh oc-addwh-badge" data-section="${section}" data-index="${i}" title="Добавить эту позицию на склад">+</button>`}
+      </td>
       <td class="count-merged wh-merged three-tier">
         <div class="count-tier count-tier-num">
           <input type="number" min="0" value="${item.qty || 0}" class="ocQtyInput"
@@ -1654,7 +1672,6 @@ function renderOneCSection(section) {
           <button class="iconbtn oc-menu-btn" data-section="${section}" data-index="${i}" title="Действия">⋮</button>
           <div class="menu-panel oc-menu-panel">
             <button class="oc-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
-            ${whInfo ? "" : `<button class="oc-addwh" data-section="${section}" data-index="${i}" title="Добавить эту позицию на склад">+</button>`}
             <button class="oc-del danger" data-section="${section}" data-index="${i}" title="Удалить из 1C">✕</button>
           </div>
         </div>
