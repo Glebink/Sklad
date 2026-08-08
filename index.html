@@ -206,18 +206,14 @@
   }
   .search-bar.pinned {
     position: fixed;
-    top: max(6px, env(safe-area-inset-top));
+    top: calc(max(16px, env(safe-area-inset-top)) + 54px);
     z-index: 80;
     background: #fff;
     opacity: 1;
     margin: 0;
     box-sizing: border-box;
-    border-radius: 0 0 10px 10px;
+    border-radius: 10px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.15);
-    /* Резерв места справа, чтобы плавающая кнопка синхронизации (⚙/☁,
-       фиксирована у правого края экрана) не перекрывала стрелки навигации
-       по результатам поиска. */
-    padding-right: 58px;
   }
   .search-count {
     font-size: 13px; color: #475569; white-space: nowrap; padding: 0 4px;
@@ -247,6 +243,8 @@
   td { padding: 5px 8px; font-size: 15px; vertical-align: middle; }
   td.num { width: 44px; text-align: center; color: #94a3b8; font-size: 13px; }
   td.code { width: 130px; user-select: text; -webkit-user-select: text; font-size: 12px; color: #475569; font-family: monospace; white-space: nowrap; }
+  .code-split { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.25; }
+  .code-split .code-line + .code-line { border-top: 1px solid #cbd5e1; margin-top: 2px; padding-top: 2px; }
   td.code.wh-code { font-size: 15px; font-weight: 600; width: auto; white-space: nowrap; }
   .code-text { cursor: pointer; border-radius: 3px; padding: 1px 2px; }
   .code-text.code-copied { background: #bbf7d0; }
@@ -338,6 +336,8 @@
   }
   td.buttons.wh-buttons { width: 40px; text-align: center; }
   td.buttons.wh-buttons > .menu-wrap { display: block; }
+  td.buttons.oc-buttons { width: 44px; text-align: center; }
+  td.buttons.oc-buttons > .menu-wrap { display: block; }
   .btn {
     width: 27px; height: 27px; border-radius: 6px; border: none;
     font-size: 15px; font-weight: 700; color: #fff; cursor: pointer; line-height: 1;
@@ -442,6 +442,8 @@
     td.buttons > div { gap: 3px; }
     td.buttons.wh-buttons { width: 30px; }
     td.buttons.wh-buttons .wh-menu-btn { width: 26px; height: 26px; font-size: 15px; }
+    td.buttons.oc-buttons { width: 32px; }
+    td.buttons.oc-buttons .oc-menu-btn { width: 26px; height: 26px; font-size: 15px; }
     /* «Учёт»: объединённая колонка «Шт» на мобильном — уже, кнопки чуть меньше */
     td.count-merged { width: 40px; }
     .count-tier-num { padding: 4px 2px; }
@@ -842,9 +844,8 @@
       <tr>
         <th class="sortable" data-table="oc" data-section="parts" data-col="code">Код <span class="sort-arrow">↕</span></th>
         <th class="sortable" data-table="oc" data-section="parts" data-col="name">Наименование <span class="sort-arrow">↕</span></th>
-        <th class="sortable narrow" data-table="oc" data-section="parts" data-col="whqty">На складе <span class="sort-arrow">↕</span><div class="col-total" id="total-oc-parts-whqty"></div></th>
-        <th class="sortable narrow" data-table="oc" data-section="parts" data-col="qty"><span class="two-line">Шт<br>1С</span> <span class="sort-arrow">↕</span><div class="col-total" id="total-oc-parts-qty"></div></th>
-        <th>✏️</th>
+        <th class="sortable narrow" data-table="oc" data-section="parts" data-col="qty"><span class="two-line-split"><span class="tl-top">1С</span><span class="tl-bot">Склад</span></span> <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-oc-parts-qty"></span><span class="merged-total-sep">/</span><span id="total-oc-parts-whqty"></span></div></th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="oc-body-parts"></tbody>
@@ -858,9 +859,8 @@
       <tr>
         <th class="sortable" data-table="oc" data-section="consumables" data-col="code">Код <span class="sort-arrow">↕</span></th>
         <th class="sortable" data-table="oc" data-section="consumables" data-col="name">Наименование <span class="sort-arrow">↕</span></th>
-        <th class="sortable narrow" data-table="oc" data-section="consumables" data-col="whqty">На складе <span class="sort-arrow">↕</span><div class="col-total" id="total-oc-consumables-whqty"></div></th>
-        <th class="sortable narrow" data-table="oc" data-section="consumables" data-col="qty"><span class="two-line">Шт<br>1С</span> <span class="sort-arrow">↕</span><div class="col-total" id="total-oc-consumables-qty"></div></th>
-        <th>✏️</th>
+        <th class="sortable narrow" data-table="oc" data-section="consumables" data-col="qty"><span class="two-line-split"><span class="tl-top">1С</span><span class="tl-bot">Склад</span></span> <span class="sort-arrow">↕</span><div class="col-total merged-total"><span id="total-oc-consumables-qty"></span><span class="merged-total-sep">/</span><span id="total-oc-consumables-whqty"></span></div></th>
+        <th></th>
       </tr>
     </thead>
     <tbody id="oc-body-consumables"></tbody>
@@ -1185,7 +1185,9 @@ function escapeHtml(str) {
 }
 /* Если код склеен из двух через "/", показываем вторым уровнем под первым */
 function formatCodeDisplay(code) {
-  return escapeHtml(code).split("/").join("<br>");
+  const parts = escapeHtml(code).split("/").map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return escapeHtml(code);
+  return `<span class="code-split">${parts.map((p) => `<span class="code-line">${p}</span>`).join("")}</span>`;
 }
 
 /* ==================== Загрузка/сохранение ==================== */
@@ -1414,7 +1416,7 @@ function renderSection(section) {
     tr.dataset.key = key;
     tr.innerHTML = `
       <td class="num">${i + 1}</td>
-      <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${escapeHtml(item.code)}</span>` : "—"}</td>
+      <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
       <td class="name">${escapeHtml(item.name)}</td>
       <td class="check">
         <button class="chk-toggle${isChecked ? " on" : ""}" data-section="${section}" data-index="${i}" title="Отметить как учтено">${isChecked ? "✓" : ""}</button>
@@ -2165,8 +2167,8 @@ function handleWarehouseClick(e) {
 document.getElementById("wh-body-parts").addEventListener("click", handleWarehouseClick);
 document.getElementById("wh-body-consumables").addEventListener("click", handleWarehouseClick);
 document.addEventListener("click", (e) => {
-  if (e.target.closest(".wh-menu-wrap")) return;
-  closeAllWhMenus();
+  if (!e.target.closest(".wh-menu-wrap")) closeAllWhMenus();
+  if (!e.target.closest(".oc-menu-wrap")) closeAllOcMenus();
 });
 
 function handleWarehouseQtyEdit(e) {
@@ -2747,16 +2749,21 @@ function renderOneCSection(section) {
     return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
       <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
       <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${altNameHtml(item.code, whInfo, true)}</td>
-      <td class="readout">${whInfo ? whInfo.qty : "—"}</td>
-      <td class="stock">
-        <input type="number" min="0" value="${item.qty || 0}" class="ocQtyInput"
-          data-section="${section}" data-index="${i}">
+      <td class="count-merged wh-merged">
+        <div class="count-tier count-tier-num">
+          <input type="number" min="0" value="${item.qty || 0}" class="ocQtyInput"
+            data-section="${section}" data-index="${i}">
+        </div>
+        <div class="count-tier count-tier-oc">${whInfo ? whInfo.qty : "—"}</div>
       </td>
-      <td class="buttons">
-        <div class="btn-row">
-          <button class="btn edit oc-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
-          ${whInfo ? "" : `<button class="btn addwh oc-addwh" data-section="${section}" data-index="${i}" title="Добавить эту позицию на склад">+</button>`}
-          <button class="btn del oc-del" data-section="${section}" data-index="${i}" title="Удалить из 1C">✕</button>
+      <td class="buttons oc-buttons">
+        <div class="menu-wrap oc-menu-wrap">
+          <button class="iconbtn oc-menu-btn" data-section="${section}" data-index="${i}" title="Действия">⋮</button>
+          <div class="menu-panel oc-menu-panel">
+            <button class="oc-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
+            ${whInfo ? "" : `<button class="oc-addwh" data-section="${section}" data-index="${i}" title="Добавить эту позицию на склад">+</button>`}
+            <button class="oc-del danger" data-section="${section}" data-index="${i}" title="Удалить из 1C">✕</button>
+          </div>
         </div>
         <div class="diff-row">
           <span class="diff ${diff === null ? "" : (diff > 0 ? "plus" : (diff < 0 ? "minus" : "zero"))}">${diff === null ? "" : (diff > 0 ? "+" + diff : diff)}</span>
@@ -2774,11 +2781,25 @@ function renderOneCAll() {
 }
 
 /* --- клики по строкам 1C --- */
+function closeAllOcMenus(except) {
+  document.querySelectorAll(".oc-menu-panel.open").forEach((p) => {
+    if (p !== except) p.classList.remove("open");
+  });
+}
 function handleOneCClick(e) {
   const section = e.currentTarget.id.replace("oc-body-", "");
   const btn = e.target.closest("button");
   if (btn) {
     const index = parseInt(btn.dataset.index, 10);
+    if (btn.classList.contains("oc-menu-btn")) {
+      e.stopPropagation();
+      const panel = btn.parentElement.querySelector(".oc-menu-panel");
+      const willOpen = !panel.classList.contains("open");
+      closeAllOcMenus();
+      panel.classList.toggle("open", willOpen);
+      return;
+    }
+    closeAllOcMenus();
     if (btn.classList.contains("oc-del")) {
       openConfirmOneC(section, index);
     } else if (btn.classList.contains("oc-edit")) {
