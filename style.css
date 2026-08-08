@@ -302,8 +302,7 @@
   .count-tier-oc { padding: 5px 2px; font-size: 14px; font-weight: 700; color: #475569; }
   .count-tier-diff { padding: 4px 2px; }
   .count-tier-diff .diff { display: block; }
-  .merged-total { display: flex; align-items: center; justify-content: center; gap: 3px; }
-  .merged-total-sep { opacity: 0.5; font-weight: 400; }
+  .merged-total { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
 
   td.buttons { width: 68px; white-space: nowrap; }
   td.buttons > div {

@@ -2321,7 +2321,7 @@ document.getElementById("ocToWhName").addEventListener("keydown", (e) => {
    Под заголовком показывается сумма по разделу. Позиции без связи
    в сумму «чужой» колонки не попадают (там прочерк, а не ноль). */
 function fmtTotal(n) {
-  return "Σ " + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
 }
 function setTotal(id, value) {
   const el = document.getElementById(id);
