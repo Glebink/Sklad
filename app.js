@@ -320,7 +320,10 @@ function renderSection(section) {
     tr.innerHTML = `
       <td class="num">${i + 1}</td>
       <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
-      <td class="name">${escapeHtml(item.name)}</td>
+      <td class="name">
+        ${escapeHtml(item.name)}
+        ${guest ? "" : `<button class="ca-del-badge" data-section="${section}" data-index="${i}" title="Удалить строку">🗑</button>`}
+      </td>
       <td class="check">
         <button class="chk-toggle${isChecked ? " on" : ""}" data-section="${section}" data-index="${i}" title="Отметить как учтено">${isChecked ? "✓" : ""}</button>
       </td>
@@ -363,6 +366,15 @@ function handleCountClick(e) {
     // (см. setupQtyLongPress) — короткий тап и долгое нажатие делают разное.
     if (btn.classList.contains("chk-toggle")) {
       checked[key] = !checked[key];
+      persistCurrent();
+      renderSection(section);
+    } else if (btn.classList.contains("ca-del-badge")) {
+      if (!confirm(`Удалить «${item.name}» из списка?`)) return;
+      pushHistory();
+      sections[section].splice(index, 1);
+      delete counts[key];
+      delete checked[key];
+      selectedCA[section].delete(key);
       persistCurrent();
       renderSection(section);
     }
@@ -594,12 +606,6 @@ document.getElementById("confirmOverlay").addEventListener("click", (e) => {
 // Что делает каждый вид подтверждения. pendingDelete доступен внутри
 // (section/index — если действие точечное, для «обнулить»/«удалить всё» не нужны).
 const DELETE_ACTIONS = {
-  reset: () => {
-    pushHistory();
-    Object.keys(counts).forEach((k) => { counts[k] = 0; });
-    persistCurrent();
-    renderAll();
-  },
   whReset: () => {
     pushWhHistory();
     ["parts", "consumables"].forEach((sec) => {
@@ -644,9 +650,6 @@ document.getElementById("confirmYes").addEventListener("click", () => {
   closeConfirm();
 });
 
-document.getElementById("resetBtn").addEventListener("click", () => {
-  openConfirmDelete("reset", `Обнулить все счётчики за ${formatFull(currentDate)}?`);
-});
 document.getElementById("deleteAllBtn").addEventListener("click", () => {
   openConfirmDelete("deleteAll",
     `Удалить ВСЕ позиции (детали и расходники) за ${formatFull(currentDate)}? Счётчики и сами строки будут стёрты полностью. Это можно отменить кнопкой ↶.`);
@@ -894,32 +897,6 @@ document.getElementById("historyOverlay").addEventListener("click", (e) => {
   if (e.target.id === "historyOverlay") closeHistory();
 });
 
-/* ==================== Копировать / Вставить позиции дня ==================== */
-document.getElementById("copyDayBtn").addEventListener("click", () => {
-  clipboardDay = {
-    parts: sections.parts.map((it) => ({ name: it.name, code: it.code })),
-    consumables: sections.consumables.map((it) => ({ name: it.name, code: it.code }))
-  };
-  saveClipboard();
-  const btn = document.getElementById("copyDayBtn");
-  const old = btn.textContent;
-  btn.textContent = "✓";
-  setTimeout(() => { btn.textContent = old; }, 900);
-});
-document.getElementById("pasteDayBtn").addEventListener("click", () => {
-  if (!clipboardDay || (clipboardDay.parts.length === 0 && clipboardDay.consumables.length === 0)) {
-    alert("Буфер пуст — сначала скопируйте позиции с другого дня (кнопка ⧉).");
-    return;
-  }
-  pushHistory();
-  sections.parts = clipboardDay.parts.map((it) => ({ name: it.name, code: it.code }));
-  sections.consumables = clipboardDay.consumables.map((it) => ({ name: it.name, code: it.code }));
-  counts = {};
-  checked = {};
-  persistCurrent();
-  renderAll();
-});
-
 /* ==================== Переключение даты ==================== */
 const dateInput = document.getElementById("reportDate");
 dateInput.value = currentDate;
@@ -957,13 +934,13 @@ function buildExportTable(title, section) {
     .map((item) => [item.name, item.code, counts[countKey(section, item)] || 0, !!checked[countKey(section, item)]])
     .filter(([, , qty]) => qty > 0);
   if (rows.length === 0) return "";
-  const rowsHtml = rows.map(([name, code, qty, isChecked]) =>
-    `<tr><td>${escapeHtml(name)}</td><td style="text-align:center">${qty}</td><td style="text-align:center; font-size:15px;">${isChecked ? "✓" : "▢"}</td></tr>`
+  const rowsHtml = rows.map(([name, code, qty]) =>
+    `<tr><td>${escapeHtml(name)}</td><td>${code ? escapeHtml(code) : "—"}</td><td style="text-align:center">${qty}</td></tr>`
   ).join("");
   return `
     <h3>${title}</h3>
     <table>
-      <thead><tr><th>Наименование</th><th style="width:70px;">Кол-во</th><th style="width:60px;">Учтено</th></tr></thead>
+      <thead><tr><th>Наименование</th><th style="width:130px;">Код</th><th style="width:70px;">Кол-во</th></tr></thead>
       <tbody>${rowsHtml}</tbody>
     </table>`;
 }
@@ -3069,18 +3046,18 @@ document.getElementById("syncForgetBtn").addEventListener("click", () => {
   updateGuestModeUI();
 });
 
-/* ==================== Выпадающее меню действий (⋮) ==================== */
-document.getElementById("caMenuBtn").addEventListener("click", (e) => {
+/* ==================== Выпадающее меню действий (⋮) — Экспорт/История ==================== */
+document.getElementById("headMenuBtn").addEventListener("click", (e) => {
   e.stopPropagation();
-  document.getElementById("caMenuPanel").classList.toggle("open");
+  document.getElementById("headMenuPanel").classList.toggle("open");
 });
-document.querySelectorAll("#caMenuPanel button").forEach((btn) => {
-  btn.addEventListener("click", () => document.getElementById("caMenuPanel").classList.remove("open"));
+document.querySelectorAll("#headMenuPanel button").forEach((btn) => {
+  btn.addEventListener("click", () => document.getElementById("headMenuPanel").classList.remove("open"));
 });
 document.addEventListener("click", (e) => {
-  const panel = document.getElementById("caMenuPanel");
+  const panel = document.getElementById("headMenuPanel");
   if (!panel.classList.contains("open")) return;
-  if (e.target.closest("#caMenuPanel") || e.target.closest("#caMenuBtn")) return;
+  if (e.target.closest("#headMenuPanel") || e.target.closest("#headMenuBtn")) return;
   panel.classList.remove("open");
 });
 

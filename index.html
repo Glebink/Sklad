@@ -30,8 +30,13 @@
     <span id="dateDisplayText">—</span>
     <input type="date" id="reportDate">
   </div>
-  <button class="util primary" id="exportBtn">⬇ Экспорт</button>
-  <button class="util" id="syncHistoryBtn" title="История сохранений">🕘 История</button>
+  <div class="menu-wrap head-menu-wrap">
+    <button class="iconbtn" id="headMenuBtn" title="Экспорт / История">⋮</button>
+    <div class="menu-panel list" id="headMenuPanel">
+      <button class="util primary" id="exportBtn">⬇ Экспорт</button>
+      <button class="util" id="syncHistoryBtn" title="История сохранений">🕘 История</button>
+    </div>
+  </div>
   <div class="head-row-spacer" aria-hidden="true"></div>
 </div>
 
@@ -67,15 +72,7 @@
     <h2 class="section-title">Детали</h2>
     <button class="iconbtn" id="undoBtn" disabled title="Отменить последнее действие">↶</button>
     <button class="iconbtn" id="redoBtn" disabled title="Повторить действие">↷</button>
-    <div class="menu-wrap">
-      <button class="iconbtn" id="caMenuBtn" title="Ещё действия">⋮</button>
-      <div class="menu-panel" id="caMenuPanel">
-        <button id="deleteAllBtn" class="danger" title="Удалить все">✕</button>
-        <button id="resetBtn" title="Обнулить всё">0️⃣</button>
-        <button id="copyDayBtn" title="Копировать позиции этого дня">⧉</button>
-        <button id="pasteDayBtn" title="Вставить позиции (заменит текущий список дня)">📋</button>
-      </div>
-    </div>
+    <button class="iconbtn danger" id="deleteAllBtn" title="Удалить все позиции учёта за этот день">✕</button>
   </div>
   <div class="table-scroll">
   <table>

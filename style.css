@@ -257,6 +257,26 @@
     z-index: 2;
   }
   .oc-addwh-badge:active { background: #1d4ed8; }
+  .ca-del-badge {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #94a3b8;
+    color: #fff;
+    border: none;
+    font-size: 14px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+    z-index: 2;
+  }
+  .ca-del-badge:active { background: #64748b; }
   td.check { width: 40px; text-align: center; vertical-align: middle; }
   td, th { vertical-align: middle; }
   .chk-toggle {
@@ -427,6 +447,7 @@
     td.code.wh-code { font-size: 11px; width: auto; white-space: nowrap; }
     td.name { min-width: 0; font-size: 13px; line-height: 1.25; }
     .oc-addwh-badge { width: 22px; height: 22px; font-size: 15px; right: 4px; bottom: 4px; }
+    .ca-del-badge { width: 22px; height: 22px; font-size: 12px; right: 4px; bottom: 4px; }
     td.check { width: 22px; padding-left: 2px; padding-right: 2px; }
     .chk-toggle { width: 20px; height: 20px; font-size: 11px; }
     td.count { width: 22px; padding-left: 1px; padding-right: 1px; white-space: nowrap; }
@@ -652,6 +673,21 @@
   .menu-panel button:active { background: #e2e8f0; }
   .menu-panel button.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
   .menu-panel button.danger:active { background: #b91c1c; }
+
+  /* Вариант меню со списком текстовых кнопок (Экспорт/История в шапке) —
+     вместо квадратной 2-колоночной сетки эмодзи-кнопок. */
+  .menu-panel.list { grid-template-columns: 1fr; min-width: 170px; }
+  .menu-panel.list button {
+    width: 100%; height: auto;
+    padding: 10px 14px;
+    font-size: 14px;
+    justify-content: flex-start;
+    border-radius: 8px;
+  }
+
+  .iconbtn.danger { background: var(--danger); color: #fff; }
+  .iconbtn.danger:active { background: #b91c1c; }
+  .head-menu-wrap { display: flex; align-items: center; justify-content: center; }
 
   @media print {
     .page, .modal-overlay { display: none !important; }
