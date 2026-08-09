@@ -899,52 +899,18 @@ document.getElementById("historyOverlay").addEventListener("click", (e) => {
 
 /* ==================== Печать этикеток для коробок (Склад) ====================
    Лист A4 landscape, этикетки 7x5 см, зазор 2 мм, лист заполняется
-   максимальным количеством одинаковых этикеток для одного товара. */
+   максимальным количеством одинаковых этикеток для одного товара.
+   ВАЖНО: используем тот же #printArea + window.print(), что и обычный
+   экспорт — открытие через window.open() в установленном на «Домой»
+   PWA виснет без адресной строки и кнопки закрытия. */
 function printWarehouseLabels(item) {
-  const MARGIN_MM = 5;
-  const LABEL_W = 70, LABEL_H = 50, GAP = 2;
-  const PAGE_W = 297, PAGE_H = 210; // A4 landscape
-  const usableW = PAGE_W - 2 * MARGIN_MM;
-  const usableH = PAGE_H - 2 * MARGIN_MM;
-  const cols = Math.max(1, Math.floor((usableW + GAP) / (LABEL_W + GAP)));
-  const rows = Math.max(1, Math.floor((usableH + GAP) / (LABEL_H + GAP)));
-  const count = cols * rows;
+  const cols = 2, rows = 5; // подобрано под A4 книжную (по умолчанию), этикетка 70x50мм, зазор 2мм
   const name = escapeHtml(item.name);
   const code = item.code ? escapeHtml(item.code) : "";
-  const labelHtml = `<div class="label"><div class="label-name">${name}</div>${code ? `<div class="label-code">${code}</div>` : ""}</div>`;
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Этикетки — ${name}</title>
-<style>
-  @page { size: A4 landscape; margin: ${MARGIN_MM}mm; }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: -apple-system, Arial, sans-serif; }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(${cols}, ${LABEL_W}mm);
-    grid-auto-rows: ${LABEL_H}mm;
-    gap: ${GAP}mm;
-  }
-  .label {
-    border: 1px dashed #999;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    padding: 4mm;
-    overflow: hidden;
-  }
-  .label-name { font-size: 15pt; font-weight: 700; line-height: 1.2; }
-  .label-code { font-size: 12pt; font-family: monospace; color: #333; margin-top: 3mm; }
-</style></head>
-<body>
-  <div class="grid">${labelHtml.repeat(count)}</div>
-  <script>window.onload = () => { window.print(); };</script>
-</body></html>`;
-  const win = window.open("", "_blank");
-  if (!win) { alert("Не удалось открыть окно печати — проверьте, не заблокированы ли всплывающие окна."); return; }
-  win.document.open();
-  win.document.write(html);
-  win.document.close();
+  const labelHtml = `<div class="print-label"><div class="print-label-name">${name}</div>${code ? `<div class="print-label-code">${code}</div>` : ""}</div>`;
+  const printArea = document.getElementById("printArea");
+  printArea.innerHTML = `<div class="print-labels-grid" style="grid-template-columns: repeat(${cols}, 70mm);">${labelHtml.repeat(cols * rows)}</div>`;
+  window.print();
 }
 
 /* ==================== Переключение даты ==================== */
@@ -2116,7 +2082,19 @@ function getSafeAreaTop() {
   document.body.removeChild(probe);
   return px;
 }
-const PIN_OFFSET = Math.max(6, getSafeAreaTop());
+// Поиск при прокрутке фиксируется НИЖЕ прилипающей шапки (дата/вкладки/⋮),
+// а не сразу под вырезом камеры — иначе они наложатся друг на друга.
+function computePinOffset() {
+  const header = document.getElementById("appHeader");
+  const headerH = header ? header.getBoundingClientRect().height : 0;
+  return Math.max(6, getSafeAreaTop()) + headerH + 4;
+}
+let PIN_OFFSET = computePinOffset();
+document.documentElement.style.setProperty("--pin-offset", PIN_OFFSET + "px");
+window.addEventListener("resize", () => {
+  PIN_OFFSET = computePinOffset();
+  document.documentElement.style.setProperty("--pin-offset", PIN_OFFSET + "px");
+});
 
 function updateStickySearch() {
   const page = document.querySelector(".page");

@@ -61,12 +61,16 @@
     display: inline-block;
   }
 
-  .tabs {
+  .app-header {
     display: flex;
+    align-items: center;
     gap: 8px;
-    margin-bottom: 14px;
-    position: relative;
-    z-index: 20;
+    position: sticky;
+    top: max(6px, env(safe-area-inset-top));
+    z-index: 150;
+    background: var(--bg);
+    padding-bottom: 10px;
+    margin-bottom: 4px;
   }
   .tab-btn {
     flex: 1;
@@ -125,15 +129,16 @@
   #tabsMenuPanel .tab-btn:active { background: #454f63; }
   #tabsMenuPanel .tab-btn.active { background: var(--accent); border-color: var(--accent); }
 
-  /* Верхняя строка шапки (дата + «Экспорт») — одинаковый вид с кнопками вкладок ниже */
-  .head-row .date-picker,
-  .head-row button.util {
+  /* Верхняя прилипающая шапка (дата + меню вкладок + «Экспорт»/«История») —
+     одинаковый вид всех элементов в ряд */
+  .app-header .date-picker,
+  .app-header button.util {
     height: 44px;
     border-radius: 10px;
     font-size: 15px;
     font-weight: 700;
   }
-  .head-row .date-picker #dateDisplayText { font-size: 15px; font-weight: 700; }
+  .app-header .date-picker #dateDisplayText { font-size: 15px; font-weight: 700; }
 
   .view { display: none; }
   .view.active { display: block; }
@@ -231,7 +236,7 @@
   }
   .search-bar.pinned {
     position: fixed;
-    top: calc(max(16px, env(safe-area-inset-top)) + 54px);
+    top: var(--pin-offset, calc(max(16px, env(safe-area-inset-top)) + 54px));
     z-index: 80;
     background: #fff;
     opacity: 1;
@@ -452,21 +457,7 @@
   .suggest-item .code { font-family: monospace; font-size: 12px; color: #64748b; }
   .suggest-empty { padding: 9px 12px; font-size: 13px; color: #94a3b8; }
 
-  .page-head {
-    text-align: center;
-    margin-bottom: 12px;
-  }
-  .page-head h1 { margin: 0; text-align: center; white-space: nowrap; }
-  .head-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-  .head-row .date-picker.hidden { visibility: hidden; }
-  @media (max-width: 640px) {
-    .page-head h1 { font-size: 18px; white-space: normal; }
-  }
+  .app-header .date-picker.hidden { visibility: hidden; }
   .footer-note { font-size: 12px; color: #667; margin-top: 10px; }
 
   /* ==================== Компактные таблицы на смартфоне ====================
@@ -645,6 +636,36 @@
   #printArea table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
   #printArea th, #printArea td { border: 1px solid #999; padding: 6px 8px; font-size: 13px; text-align: left; }
   #printArea thead th { background: #eee; }
+  #printArea .print-labels-grid {
+    display: grid;
+    gap: 2mm;
+  }
+  #printArea .print-label {
+    width: 70mm;
+    height: 50mm;
+    border: 1px dashed #999;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    text-align: center;
+    padding: 4mm;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
+  #printArea .print-label-name {
+    font-size: 15pt;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: auto;
+    padding-top: 2mm;
+  }
+  #printArea .print-label-code {
+    font-size: 20pt;
+    font-family: monospace;
+    color: #333;
+    margin-top: 3mm;
+  }
 
   /* ==================== Блок добавления (Учёт): 2 ряда ====================
      Ряд 1 — строка поиска/названия, растянута на всю ширину и оцентрована.

@@ -21,25 +21,11 @@
 
 <div class="page">
 
-<div class="page-head">
-  <h1>Учёт потребления деталей</h1>
-</div>
-
-<div class="head-row">
+<div class="app-header" id="appHeader">
   <div class="date-picker" id="datePickerBox">
     <span id="dateDisplayText">—</span>
     <input type="date" id="reportDate">
   </div>
-  <div class="menu-wrap head-menu-wrap">
-    <button class="iconbtn" id="headMenuBtn" title="Экспорт / История">⋮</button>
-    <div class="menu-panel list" id="headMenuPanel">
-      <button class="util primary" id="exportBtn">⬇ Экспорт</button>
-      <button class="util" id="syncHistoryBtn" title="История сохранений">🕘 История</button>
-    </div>
-  </div>
-</div>
-
-<div class="tabs">
   <div class="menu-wrap tabs-menu-wrap">
     <button class="tabs-trigger" id="tabsCurrentBtn">
       <span id="tabsCurrentLabel">Учёт</span><span class="tabs-caret">⌄</span>
@@ -48,6 +34,13 @@
       <button class="tab-btn active" id="tabConsumptionBtn">Учёт</button>
       <button class="tab-btn" id="tabWarehouseBtn">Склад</button>
       <button class="tab-btn" id="tabOneCBtn">1C</button>
+    </div>
+  </div>
+  <div class="menu-wrap head-menu-wrap">
+    <button class="iconbtn" id="headMenuBtn" title="Экспорт / История">⋮</button>
+    <div class="menu-panel list" id="headMenuPanel">
+      <button class="util primary" id="exportBtn">⬇ Экспорт</button>
+      <button class="util" id="syncHistoryBtn" title="История сохранений">🕘 История</button>
     </div>
   </div>
 </div>
