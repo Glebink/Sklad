@@ -897,6 +897,56 @@ document.getElementById("historyOverlay").addEventListener("click", (e) => {
   if (e.target.id === "historyOverlay") closeHistory();
 });
 
+/* ==================== Печать этикеток для коробок (Склад) ====================
+   Лист A4 landscape, этикетки 7x5 см, зазор 2 мм, лист заполняется
+   максимальным количеством одинаковых этикеток для одного товара. */
+function printWarehouseLabels(item) {
+  const MARGIN_MM = 5;
+  const LABEL_W = 70, LABEL_H = 50, GAP = 2;
+  const PAGE_W = 297, PAGE_H = 210; // A4 landscape
+  const usableW = PAGE_W - 2 * MARGIN_MM;
+  const usableH = PAGE_H - 2 * MARGIN_MM;
+  const cols = Math.max(1, Math.floor((usableW + GAP) / (LABEL_W + GAP)));
+  const rows = Math.max(1, Math.floor((usableH + GAP) / (LABEL_H + GAP)));
+  const count = cols * rows;
+  const name = escapeHtml(item.name);
+  const code = item.code ? escapeHtml(item.code) : "";
+  const labelHtml = `<div class="label"><div class="label-name">${name}</div>${code ? `<div class="label-code">${code}</div>` : ""}</div>`;
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Этикетки — ${name}</title>
+<style>
+  @page { size: A4 landscape; margin: ${MARGIN_MM}mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Arial, sans-serif; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(${cols}, ${LABEL_W}mm);
+    grid-auto-rows: ${LABEL_H}mm;
+    gap: ${GAP}mm;
+  }
+  .label {
+    border: 1px dashed #999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 4mm;
+    overflow: hidden;
+  }
+  .label-name { font-size: 15pt; font-weight: 700; line-height: 1.2; }
+  .label-code { font-size: 12pt; font-family: monospace; color: #333; margin-top: 3mm; }
+</style></head>
+<body>
+  <div class="grid">${labelHtml.repeat(count)}</div>
+  <script>window.onload = () => { window.print(); };</script>
+</body></html>`;
+  const win = window.open("", "_blank");
+  if (!win) { alert("Не удалось открыть окно печати — проверьте, не заблокированы ли всплывающие окна."); return; }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+}
+
 /* ==================== Переключение даты ==================== */
 const dateInput = document.getElementById("reportDate");
 dateInput.value = currentDate;
@@ -986,6 +1036,7 @@ function renderWarehouseSection(section) {
           <div class="menu-panel wh-menu-panel">
             <button class="wh-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
             <button class="wh-history" data-section="${section}" data-index="${i}" title="История выдачи">🕘</button>
+            <button class="wh-print" data-section="${section}" data-index="${i}" title="Печать этикеток">🖨️</button>
             <button class="wh-del danger" data-section="${section}" data-index="${i}" title="Удалить со склада">✕</button>
           </div>
         </div>
@@ -1026,6 +1077,8 @@ function handleWarehouseClick(e) {
       openWhEdit(section, index);
     } else if (btn.classList.contains("wh-history")) {
       openHistory(section, warehouse[section][index]);
+    } else if (btn.classList.contains("wh-print")) {
+      printWarehouseLabels(warehouse[section][index]);
     }
     return;
   }
