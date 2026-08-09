@@ -110,7 +110,7 @@
   }
   .tabs-trigger:active { background: #1d4ed8; }
   .tabs-caret { font-size: 12px; opacity: 0.85; }
-  .tabs-menu-wrap .menu-panel.list { min-width: 150px; }
+  .tabs-menu-wrap .menu-panel.list { min-width: 150px; left: 0; right: auto; }
   .tabs-menu-wrap .menu-panel.list .tab-btn { flex: none; width: 100%; }
   #tabsMenuPanel {
     background: #1f2430;
@@ -164,7 +164,7 @@
     border-radius: 8px;
     padding: 0 10px;
     height: 36px;
-    min-width: 180px;
+    min-width: 140px;
     background: #f8fafc;
     gap: 6px;
     white-space: nowrap;
