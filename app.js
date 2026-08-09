@@ -1167,6 +1167,7 @@ document.getElementById("whAddBtn").addEventListener("click", () => {
 });
 
 /* ==================== Переключение вкладок ==================== */
+const TAB_LABELS = { consumption: "Учёт", warehouse: "Склад", onec: "1C" };
 function switchTab(target) {
   // 1) Сначала — гарантированное переключение вида. Ничего, что может упасть.
   const map = {
@@ -1181,6 +1182,10 @@ function switchTab(target) {
     document.getElementById(btnId).classList.toggle("active", on);
     document.getElementById(viewId).classList.toggle("active", on);
   });
+  const label = document.getElementById("tabsCurrentLabel");
+  if (label) label.textContent = TAB_LABELS[target];
+  const panel = document.getElementById("tabsMenuPanel");
+  if (panel) panel.classList.remove("open");
 
   // 2) Остальное — в защищённом блоке: даже если что-то упадёт,
   //    вкладка уже переключилась и экран не «залипнет».
@@ -1205,6 +1210,16 @@ function tabTargetFromId(id) {
   if (id === "tabOneCBtn") return "onec";
   return "consumption";
 }
+document.getElementById("tabsCurrentBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("tabsMenuPanel").classList.toggle("open");
+});
+document.addEventListener("click", (e) => {
+  const panel = document.getElementById("tabsMenuPanel");
+  if (!panel.classList.contains("open")) return;
+  if (e.target.closest("#tabsMenuPanel") || e.target.closest("#tabsCurrentBtn")) return;
+  panel.classList.remove("open");
+});
 
 
 /* ==================== Сортировка по клику на заголовок столбца ====================

@@ -37,13 +37,19 @@
       <button class="util" id="syncHistoryBtn" title="История сохранений">🕘 История</button>
     </div>
   </div>
-  <div class="head-row-spacer" aria-hidden="true"></div>
 </div>
 
 <div class="tabs">
-  <button class="tab-btn active" id="tabConsumptionBtn">Учёт</button>
-  <button class="tab-btn" id="tabWarehouseBtn">Склад</button>
-  <button class="tab-btn" id="tabOneCBtn">1C</button>
+  <div class="menu-wrap tabs-menu-wrap">
+    <button class="tab-btn active tabs-trigger" id="tabsCurrentBtn">
+      <span id="tabsCurrentLabel">Учёт</span><span class="tabs-caret">⌄</span>
+    </button>
+    <div class="menu-panel list" id="tabsMenuPanel">
+      <button class="tab-btn active" id="tabConsumptionBtn">Учёт</button>
+      <button class="tab-btn" id="tabWarehouseBtn">Склад</button>
+      <button class="tab-btn" id="tabOneCBtn">1C</button>
+    </div>
+  </div>
 </div>
 
 <div class="add-panel search-bar" id="whSearchBar" style="display:none;"></div>
@@ -72,7 +78,7 @@
     <h2 class="section-title">Детали</h2>
     <button class="iconbtn" id="undoBtn" disabled title="Отменить последнее действие">↶</button>
     <button class="iconbtn" id="redoBtn" disabled title="Повторить действие">↷</button>
-    <button class="iconbtn danger" id="deleteAllBtn" title="Удалить все позиции учёта за этот день">✕</button>
+    <button class="iconbtn" id="deleteAllBtn" title="Удалить все позиции учёта за этот день">✕</button>
   </div>
   <div class="table-scroll">
   <table>
