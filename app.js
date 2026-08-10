@@ -2062,13 +2062,64 @@ const nameOrCode = (item, q) =>
 
 
 /* ==================== Закрепление общей шапки (дата/вкладки/⋮ + поиск) ====================
-   Работает через чистый CSS position:sticky (см. .sticky-top в style.css).
-   Раньше здесь была ещё и JS-подстраховка через position:fixed «на всякий
-   случай» — убрана: она конфликтовала с нативным sticky (тот уже
-   резервирует место в потоке сам) и создавала лишний отступ, из-за
-   которого панель добавления в «Учёте» наезжала под шапку. Функция
-   оставлена пустой, чтобы не переписывать места, где её вызывают. */
-function updateStickySearch() {}
+   CSS position:sticky — основной механизм (см. .sticky-top в style.css).
+   Плюс JS-подстраховка через position:fixed на случай, если sticky не
+   срабатывает в конкретном окружении (было замечено на устройстве —
+   на всякий случай подстраховываемся отдельно, а не полагаемся только
+   на CSS). ВАЖНО отличие от прошлой версии: замеряем реальную высоту
+   шапки КАЖДЫЙ раз перед переключением на fixed, а не один раз — тогда
+   не будет наезда контента, даже если высота шапки успела измениться
+   (например, из-за переноса текста после смены вкладки). */
+const stickyTopEl = document.getElementById("stickyTop");
+let stickyTopPlaceholder = null;
+if (stickyTopEl) {
+  stickyTopPlaceholder = document.createElement("div");
+  stickyTopPlaceholder.className = "sticky-top-placeholder";
+  stickyTopEl.parentNode.insertBefore(stickyTopPlaceholder, stickyTopEl);
+}
+function getSafeAreaTopPx() {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed; top:0; height:0; padding-top:env(safe-area-inset-top, 0px); visibility:hidden;";
+  document.body.appendChild(probe);
+  const px = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+  document.body.removeChild(probe);
+  return px;
+}
+const STICKY_THRESHOLD = Math.max(6, getSafeAreaTopPx());
+function updateStickySearch() {
+  if (!stickyTopEl || !stickyTopPlaceholder) return;
+  const page = document.querySelector(".page");
+  if (!page) return;
+  const pinned = stickyTopEl.classList.contains("js-pinned");
+  if (!pinned) {
+    // Ещё не закреплён: проверяем естественное положение элемента в потоке.
+    const top = stickyTopEl.getBoundingClientRect().top;
+    if (top <= STICKY_THRESHOLD) {
+      const rect = stickyTopEl.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      stickyTopPlaceholder.style.height = rect.height + "px";
+      stickyTopPlaceholder.style.display = "block";
+      stickyTopEl.classList.add("js-pinned");
+      stickyTopEl.style.left = pageRect.left + "px";
+      stickyTopEl.style.width = pageRect.width + "px";
+    }
+  } else {
+    // Уже закреплён: проверяем распорку — вернулись ли мы наверх страницы.
+    const phTop = stickyTopPlaceholder.getBoundingClientRect().top;
+    if (phTop > STICKY_THRESHOLD + 2) {
+      stickyTopEl.classList.remove("js-pinned");
+      stickyTopEl.style.left = stickyTopEl.style.width = "";
+      stickyTopPlaceholder.style.display = "none";
+    } else {
+      const pageRect = page.getBoundingClientRect();
+      stickyTopEl.style.left = pageRect.left + "px";
+      stickyTopEl.style.width = pageRect.width + "px";
+    }
+  }
+}
+window.addEventListener("scroll", updateStickySearch, { passive: true });
+window.addEventListener("resize", updateStickySearch);
+updateStickySearch();
 
 
 /* ==================== Отмена / повтор на «Складе» ==================== */

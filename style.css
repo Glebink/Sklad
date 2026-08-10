@@ -72,6 +72,15 @@
     margin-bottom: 14px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
   }
+  /* Подстраховка через position:fixed на случай, если нативный sticky не
+     срабатывает в конкретном окружении. JS переключает этот класс сам,
+     placeholder-распорка занимает освободившееся место в потоке. */
+  .sticky-top.js-pinned {
+    position: fixed !important;
+    top: max(6px, env(safe-area-inset-top)) !important;
+    margin: 0 !important;
+  }
+  .sticky-top-placeholder { display: none; }
   .app-header {
     display: flex;
     align-items: center;
