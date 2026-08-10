@@ -904,7 +904,7 @@ document.getElementById("historyOverlay").addEventListener("click", (e) => {
    экспорт — открытие через window.open() в установленном на «Домой»
    PWA виснет без адресной строки и кнопки закрытия. */
 function printWarehouseLabels(item) {
-  const cols = 2, rows = 5; // подобрано под A4 книжную (по умолчанию), этикетка 70x50мм, зазор 2мм
+  const cols = 2, rows = 4; // с запасом под системную печать (Safari добавляет свою шапку/подвал) — гарантированно 1 лист
   const name = escapeHtml(item.name);
   const code = item.code ? escapeHtml(item.code) : "";
   const labelHtml = `<div class="print-label"><div class="print-label-name">${name}</div>${code ? `<div class="print-label-code">${code}</div>` : ""}</div>`;
@@ -2062,80 +2062,13 @@ const nameOrCode = (item, q) =>
 
 
 /* ==================== Закрепление панели поиска в шапке ====================
-   При прокрутке панель доходит до верха экрана и фиксируется там.
-   Место в потоке занимает распорка, чтобы страницу не «дёргало». */
-const stickyBars = ["ca", "wh", "oc"].map((k) => {
-  const bar = document.getElementById(k + "SearchBar");
-  const ph = document.createElement("div");
-  ph.style.display = "none";
-  bar.parentNode.insertBefore(ph, bar);
-  return { bar, ph };
-});
-
-/* Реальное значение отступа под вырез камеры в пикселях (env() нельзя
-   прочитать напрямую через JS, поэтому измеряем через служебный элемент). */
-function getSafeAreaTop() {
-  const probe = document.createElement("div");
-  probe.style.cssText = "position:fixed; top:0; height:0; padding-top:env(safe-area-inset-top, 0px); visibility:hidden;";
-  document.body.appendChild(probe);
-  const px = parseFloat(getComputedStyle(probe).paddingTop) || 0;
-  document.body.removeChild(probe);
-  return px;
-}
-// Поиск при прокрутке фиксируется НИЖЕ прилипающей шапки (дата/вкладки/⋮),
-// а не сразу под вырезом камеры — иначе они наложатся друг на друга.
-function computePinOffset() {
-  const header = document.getElementById("appHeader");
-  const headerH = header ? header.getBoundingClientRect().height : 0;
-  return Math.max(6, getSafeAreaTop()) + headerH + 4;
-}
-let PIN_OFFSET = computePinOffset();
-document.documentElement.style.setProperty("--pin-offset", PIN_OFFSET + "px");
-window.addEventListener("resize", () => {
-  PIN_OFFSET = computePinOffset();
-  document.documentElement.style.setProperty("--pin-offset", PIN_OFFSET + "px");
-});
-
-function updateStickySearch() {
-  const page = document.querySelector(".page");
-  if (!page) return;
-  const pr = page.getBoundingClientRect();
-  stickyBars.forEach(({ bar, ph }) => {
-    // ВАЖНО: у закреплённой (position: fixed) панели offsetParent всегда null,
-    // поэтому судить о видимости можно только по display.
-    if (bar.style.display === "none") {
-      bar.classList.remove("pinned");
-      bar.style.left = bar.style.width = "";
-      ph.style.display = "none";
-      return;
-    }
-    const pinned = bar.classList.contains("pinned");
-    if (!pinned) {
-      if (bar.getBoundingClientRect().top < PIN_OFFSET) {
-        // распорка повторяет отступы панели, иначе страница дёргается
-        ph.style.height = bar.offsetHeight + "px";
-        ph.style.marginTop = "-6px";
-        ph.style.marginBottom = "14px";
-        ph.style.display = "block";
-        bar.classList.add("pinned");
-        bar.style.left = pr.left + "px";
-        bar.style.width = pr.width + "px";
-      }
-    } else {
-      // порог гасит дребезг на границе срабатывания
-      if (ph.getBoundingClientRect().top >= PIN_OFFSET + 2) {
-        bar.classList.remove("pinned");
-        bar.style.left = bar.style.width = "";
-        ph.style.display = "none";
-      } else {
-        bar.style.left = pr.left + "px";
-        bar.style.width = pr.width + "px";
-      }
-    }
-  });
-}
-window.addEventListener("scroll", updateStickySearch, { passive: true });
-window.addEventListener("resize", updateStickySearch);
+   Раньше здесь была ручная JS-эмуляция «прилипания» (position: fixed при
+   прокрутке + распорка). Теперь весь блок #stickyTop (дата/вкладки/⋮ +
+   поиск) закреплён нативным CSS position:sticky одним куском — отдельная
+   логика для поиска больше не нужна. Функция оставлена пустой, чтобы не
+   переписывать все места, где она вызывается по инерции.
+   updateStickySearch намеренно ничего не делает. */
+function updateStickySearch() {}
 
 
 /* ==================== Отмена / повтор на «Складе» ==================== */

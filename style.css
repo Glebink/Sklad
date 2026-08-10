@@ -61,16 +61,24 @@
     display: inline-block;
   }
 
+  .sticky-top {
+    position: sticky;
+    top: max(6px, env(safe-area-inset-top));
+    z-index: 150;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 14px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+  }
   .app-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    position: sticky;
-    top: max(6px, env(safe-area-inset-top));
-    z-index: 150;
-    background: var(--bg);
-    padding-bottom: 10px;
-    margin-bottom: 4px;
+  }
+  .sticky-top .search-bar {
+    margin: 10px 0 0 0;
   }
   .tab-btn {
     flex: 1;
@@ -230,21 +238,6 @@
   tbody tr.row-picked { background: #fde68a !important; }
   tbody tr.row-flash { background: #fef08a !important; }
   tbody tr.row-current { background: #fdba74 !important; box-shadow: inset 3px 0 0 #ea580c; }
-  .search-bar {
-    margin-top: -6px;
-    margin-bottom: 14px;
-  }
-  .search-bar.pinned {
-    position: fixed;
-    top: var(--pin-offset, calc(max(16px, env(safe-area-inset-top)) + 54px));
-    z-index: 80;
-    background: #fff;
-    opacity: 1;
-    margin: 0;
-    box-sizing: border-box;
-    border-radius: 10px;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.15);
-  }
   .search-count {
     font-size: 13px; color: #475569; white-space: nowrap; padding: 0 4px;
     min-width: 62px; text-align: center;
@@ -654,7 +647,7 @@
     overflow: hidden;
   }
   #printArea .print-label-name {
-    font-size: 15pt;
+    font-size: 17pt;
     font-weight: 700;
     line-height: 1.2;
     margin-bottom: auto;
