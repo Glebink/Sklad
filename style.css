@@ -72,6 +72,15 @@
     margin-bottom: 14px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
   }
+  /* Резервный вариант через position:fixed на случай, если нативный
+     sticky не срабатывает надёжно (Safari/iOS + overflow-x:hidden на
+     body — известная нестыковка). JS переключает этот класс сам. */
+  .sticky-top.js-pinned {
+    position: fixed;
+    top: max(6px, env(safe-area-inset-top));
+    z-index: 150;
+    box-sizing: border-box;
+  }
   .app-header {
     display: flex;
     align-items: center;

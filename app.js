@@ -2061,14 +2061,54 @@ const nameOrCode = (item, q) =>
   item.name.toLowerCase().includes(q) || (item.code && item.code.toLowerCase().includes(q));
 
 
-/* ==================== Закрепление панели поиска в шапке ====================
-   Раньше здесь была ручная JS-эмуляция «прилипания» (position: fixed при
-   прокрутке + распорка). Теперь весь блок #stickyTop (дата/вкладки/⋮ +
-   поиск) закреплён нативным CSS position:sticky одним куском — отдельная
-   логика для поиска больше не нужна. Функция оставлена пустой, чтобы не
-   переписывать все места, где она вызывается по инерции.
-   updateStickySearch намеренно ничего не делает. */
-function updateStickySearch() {}
+/* ==================== Закрепление общей шапки (дата/вкладки/⋮ + поиск) ====================
+   CSS position:sticky теоретически должен справляться сам, но на iOS
+   Safari в связке с overflow-x:hidden на body это не всегда надёжно —
+   поэтому подстраховываем JS-эмуляцией через position:fixed. Работает
+   на всём блоке #stickyTop целиком (а не только на поиске, как раньше). */
+const stickyTopEl = document.getElementById("stickyTop");
+const stickyTopPlaceholder = document.createElement("div");
+stickyTopPlaceholder.style.display = "none";
+if (stickyTopEl) stickyTopEl.parentNode.insertBefore(stickyTopPlaceholder, stickyTopEl);
+
+function updateStickySearch() {
+  if (!stickyTopEl) return;
+  const page = document.querySelector(".page");
+  if (!page) return;
+  const pageRect = page.getBoundingClientRect();
+  const threshold = Math.max(6, getSafeAreaTopPx());
+  const pinned = stickyTopEl.classList.contains("js-pinned");
+  if (!pinned) {
+    if (stickyTopEl.getBoundingClientRect().top <= threshold) {
+      stickyTopPlaceholder.style.height = stickyTopEl.offsetHeight + "px";
+      stickyTopPlaceholder.style.marginBottom = "14px";
+      stickyTopPlaceholder.style.display = "block";
+      stickyTopEl.classList.add("js-pinned");
+      stickyTopEl.style.left = pageRect.left + "px";
+      stickyTopEl.style.width = pageRect.width + "px";
+    }
+  } else {
+    if (stickyTopPlaceholder.getBoundingClientRect().top > threshold + 2) {
+      stickyTopEl.classList.remove("js-pinned");
+      stickyTopEl.style.left = stickyTopEl.style.width = "";
+      stickyTopPlaceholder.style.display = "none";
+    } else {
+      stickyTopEl.style.left = pageRect.left + "px";
+      stickyTopEl.style.width = pageRect.width + "px";
+    }
+  }
+}
+function getSafeAreaTopPx() {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed; top:0; height:0; padding-top:env(safe-area-inset-top, 0px); visibility:hidden;";
+  document.body.appendChild(probe);
+  const px = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+  document.body.removeChild(probe);
+  return px;
+}
+window.addEventListener("scroll", updateStickySearch, { passive: true });
+window.addEventListener("resize", updateStickySearch);
+updateStickySearch();
 
 
 /* ==================== Отмена / повтор на «Складе» ==================== */
