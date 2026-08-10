@@ -2062,53 +2062,13 @@ const nameOrCode = (item, q) =>
 
 
 /* ==================== Закрепление общей шапки (дата/вкладки/⋮ + поиск) ====================
-   CSS position:sticky теоретически должен справляться сам, но на iOS
-   Safari в связке с overflow-x:hidden на body это не всегда надёжно —
-   поэтому подстраховываем JS-эмуляцией через position:fixed. Работает
-   на всём блоке #stickyTop целиком (а не только на поиске, как раньше). */
-const stickyTopEl = document.getElementById("stickyTop");
-const stickyTopPlaceholder = document.createElement("div");
-stickyTopPlaceholder.style.display = "none";
-if (stickyTopEl) stickyTopEl.parentNode.insertBefore(stickyTopPlaceholder, stickyTopEl);
-
-function updateStickySearch() {
-  if (!stickyTopEl) return;
-  const page = document.querySelector(".page");
-  if (!page) return;
-  const pageRect = page.getBoundingClientRect();
-  const threshold = Math.max(6, getSafeAreaTopPx());
-  const pinned = stickyTopEl.classList.contains("js-pinned");
-  if (!pinned) {
-    if (stickyTopEl.getBoundingClientRect().top <= threshold) {
-      stickyTopPlaceholder.style.height = stickyTopEl.offsetHeight + "px";
-      stickyTopPlaceholder.style.marginBottom = "14px";
-      stickyTopPlaceholder.style.display = "block";
-      stickyTopEl.classList.add("js-pinned");
-      stickyTopEl.style.left = pageRect.left + "px";
-      stickyTopEl.style.width = pageRect.width + "px";
-    }
-  } else {
-    if (stickyTopPlaceholder.getBoundingClientRect().top > threshold + 2) {
-      stickyTopEl.classList.remove("js-pinned");
-      stickyTopEl.style.left = stickyTopEl.style.width = "";
-      stickyTopPlaceholder.style.display = "none";
-    } else {
-      stickyTopEl.style.left = pageRect.left + "px";
-      stickyTopEl.style.width = pageRect.width + "px";
-    }
-  }
-}
-function getSafeAreaTopPx() {
-  const probe = document.createElement("div");
-  probe.style.cssText = "position:fixed; top:0; height:0; padding-top:env(safe-area-inset-top, 0px); visibility:hidden;";
-  document.body.appendChild(probe);
-  const px = parseFloat(getComputedStyle(probe).paddingTop) || 0;
-  document.body.removeChild(probe);
-  return px;
-}
-window.addEventListener("scroll", updateStickySearch, { passive: true });
-window.addEventListener("resize", updateStickySearch);
-updateStickySearch();
+   Работает через чистый CSS position:sticky (см. .sticky-top в style.css).
+   Раньше здесь была ещё и JS-подстраховка через position:fixed «на всякий
+   случай» — убрана: она конфликтовала с нативным sticky (тот уже
+   резервирует место в потоке сам) и создавала лишний отступ, из-за
+   которого панель добавления в «Учёте» наезжала под шапку. Функция
+   оставлена пустой, чтобы не переписывать места, где её вызывают. */
+function updateStickySearch() {}
 
 
 /* ==================== Отмена / повтор на «Складе» ==================== */
