@@ -2071,15 +2071,67 @@ const nameOrCode = (item, q) =>
 
 
 /* ==================== Закрепление общей шапки (дата/вкладки/⋮ + поиск) ====================
-   Работает через чистый CSS position:sticky (см. .sticky-top в style.css).
-   JS-подстраховка через position:fixed была добавлена «на всякий случай»,
-   но именно она ломала раскладку в установленном на «Домой» PWA
-   (standalone-режим по-другому считает safe-area/viewport при открытой
-   клавиатуре — панель добавления в «Учёте» заезжала под шапку). В обычном
-   браузере чистый sticky уже подтверждённо работает — убрал JS-часть
-   совсем, чтобы не тащить баг именно в PWA-режиме. Функция оставлена
-   пустой, чтобы не переписывать места, где её вызывают по инерции. */
-function updateStickySearch() {}
+   Подтверждено на реальном устройстве: в установленном на «Домой» PWA
+   нативный CSS position:sticky НЕ срабатывает — шапка просто уезжает вместе
+   со списком. Поэтому обязательно нужна JS-подстраховка через
+   position:fixed. Прошлая версия такой подстраховки ломала раскладку при
+   открытии клавиатуры — потому что пересчитывала позицию ещё и по событию
+   "resize" (а клавиатура на iOS тоже вызывает resize видимой области).
+   Тут — только по "scroll", и с паузой, пока в фокусе текстовое поле
+   (клавиатура открыта), чтобы не попасть на промежуточный некорректный
+   размер видимой области во время анимации появления клавиатуры. */
+const stickyTopEl = document.getElementById("stickyTop");
+let stickyTopPlaceholder = null;
+if (stickyTopEl) {
+  stickyTopPlaceholder = document.createElement("div");
+  stickyTopPlaceholder.className = "sticky-top-placeholder";
+  stickyTopEl.parentNode.insertBefore(stickyTopPlaceholder, stickyTopEl);
+}
+function getSafeAreaTopPx() {
+  const probe = document.createElement("div");
+  probe.style.cssText = "position:fixed; top:0; height:0; padding-top:env(safe-area-inset-top, 0px); visibility:hidden;";
+  document.body.appendChild(probe);
+  const px = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+  document.body.removeChild(probe);
+  return px;
+}
+const STICKY_THRESHOLD = Math.max(6, getSafeAreaTopPx());
+function isTypingNow() {
+  const el = document.activeElement;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
+}
+function updateStickySearch() {
+  if (!stickyTopEl || !stickyTopPlaceholder) return;
+  if (isTypingNow()) return; // клавиатура может ещё анимироваться — не трогаем
+  const page = document.querySelector(".page");
+  if (!page) return;
+  const pinned = stickyTopEl.classList.contains("js-pinned");
+  if (!pinned) {
+    const top = stickyTopEl.getBoundingClientRect().top;
+    if (top <= STICKY_THRESHOLD) {
+      const rect = stickyTopEl.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      stickyTopPlaceholder.style.height = rect.height + "px";
+      stickyTopPlaceholder.style.display = "block";
+      stickyTopEl.classList.add("js-pinned");
+      stickyTopEl.style.left = pageRect.left + "px";
+      stickyTopEl.style.width = pageRect.width + "px";
+    }
+  } else {
+    const phTop = stickyTopPlaceholder.getBoundingClientRect().top;
+    if (phTop > STICKY_THRESHOLD + 2) {
+      stickyTopEl.classList.remove("js-pinned");
+      stickyTopEl.style.left = stickyTopEl.style.width = "";
+      stickyTopPlaceholder.style.display = "none";
+    } else {
+      const pageRect = page.getBoundingClientRect();
+      stickyTopEl.style.left = pageRect.left + "px";
+      stickyTopEl.style.width = pageRect.width + "px";
+    }
+  }
+}
+window.addEventListener("scroll", updateStickySearch, { passive: true });
+updateStickySearch();
 
 
 /* ==================== Отмена / повтор на «Складе» ==================== */

@@ -72,6 +72,15 @@
     margin-bottom: 14px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
   }
+  /* JS-подстраховка: в установленном на «Домой» PWA нативный sticky не
+     срабатывает — JS переключает на fixed сам, только по scroll (не по
+     resize, чтобы не ловить момент открытия клавиатуры). */
+  .sticky-top.js-pinned {
+    position: fixed !important;
+    top: max(6px, env(safe-area-inset-top)) !important;
+    margin: 0 !important;
+  }
+  .sticky-top-placeholder { display: none; }
   .app-header {
     display: flex;
     align-items: center;
