@@ -684,6 +684,12 @@
   }
   .add-panel.one-row select {
     flex: 0 0 auto;
+    width: 92px;
+    padding-left: 8px;
+    padding-right: 4px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
   }
   .add-panel.one-row .add-name-wrap {
     position: relative;
@@ -692,6 +698,7 @@
   }
   .add-panel.one-row .add-name-wrap input[type="text"] {
     width: 100%;
+    min-width: 0;
   }
   .add-panel.one-row input[type="number"] {
     flex: 0 0 auto;
