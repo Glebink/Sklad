@@ -54,19 +54,17 @@
 <!-- ===================== ВКЛАДКА: УЧЁТ ===================== -->
 <div class="view active" id="viewConsumption">
 
-  <div class="add-panel two-row" id="addPanelConsumption">
-    <div class="add-row1">
+  <div class="add-panel one-row" id="addPanelConsumption">
+    <select id="newItemSection">
+      <option value="parts">Детали</option>
+      <option value="consumables">Расходники</option>
+    </select>
+    <div class="add-name-wrap">
       <input type="text" id="newItemName" placeholder="начните вводить название" autocomplete="off">
       <div class="suggest-box" id="addSuggestBox"></div>
     </div>
-    <div class="add-row2">
-      <select id="newItemSection">
-        <option value="parts">Детали</option>
-        <option value="consumables">Расходники</option>
-      </select>
-      <input type="number" id="newItemQty" min="1" placeholder="1" title="Количество (если пусто — 1)" style="width:64px;">
-      <button class="util primary" id="addItemBtn">+ Добавить</button>
-    </div>
+    <input type="number" id="newItemQty" min="1" placeholder="1" title="Количество (если пусто — 1)">
+    <button class="util primary" id="addItemBtn" title="Добавить">+</button>
   </div>
 
   <div class="section-head">
