@@ -677,6 +677,7 @@
      Раздел (выпадающий список) → название (растягивается, занимает
      оставшееся место) → количество → кнопка «+» одной строкой. */
   .add-panel.one-row {
+    position: relative;
     display: flex;
     align-items: center;
     flex-wrap: nowrap;
@@ -692,13 +693,18 @@
     white-space: nowrap;
   }
   .add-panel.one-row .add-name-wrap {
-    position: relative;
     flex: 1 1 auto;
     min-width: 0;
   }
   .add-panel.one-row .add-name-wrap input[type="text"] {
     width: 100%;
     min-width: 0;
+  }
+  /* Подсказки при вводе названия — во всю ширину панели (а не узкого поля
+     ввода), чтобы длинные названия и коды было видно целиком. */
+  .add-panel.one-row #addSuggestBox {
+    left: 12px;
+    right: 12px;
   }
   .add-panel.one-row input[type="number"] {
     flex: 0 0 auto;
