@@ -61,26 +61,31 @@
     display: inline-block;
   }
 
+  /* Шапка ВСЕГДА зафиксирована сверху (без переключения sticky/fixed по
+     прокрутке — раньше здесь было пороговое условие «отлипает при
+     прокрутке», из-за которого в PWA то наезжало на панель добавления, то
+     не прилипало вовсе). Позиция и ширина заданы через left/right/env(),
+     без JS-расчётов viewport — под iPhone это надёжнее. */
   .sticky-top {
-    position: sticky;
+    position: fixed;
     top: max(6px, env(safe-area-inset-top));
+    left: max(16px, env(safe-area-inset-left));
+    right: max(16px, env(safe-area-inset-right));
     z-index: 150;
     background: #fff;
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 10px;
-    margin-bottom: 14px;
     box-shadow: 0 4px 14px rgba(0,0,0,0.08);
+    box-sizing: border-box;
   }
-  /* JS-подстраховка: в установленном на «Домой» PWA нативный sticky не
-     срабатывает — JS переключает на fixed сам, только по scroll (не по
-     resize, чтобы не ловить момент открытия клавиатуры). */
-  .sticky-top.js-pinned {
-    position: fixed !important;
-    top: max(6px, env(safe-area-inset-top)) !important;
-    margin: 0 !important;
+  @media (min-width: 1400px) {
+    .sticky-top { max-width: 1400px; margin-left: auto; margin-right: auto; }
   }
-  .sticky-top-placeholder { display: none; }
+  /* Распорка занимает в потоке ровно ту же высоту, что и шапка — её
+     реальный размер выставляет JS (syncStickyTopHeight). Без этого
+     контент под шапкой (панель добавления и т.д.) был бы перекрыт. */
+  .sticky-top-placeholder { }
   .app-header {
     display: flex;
     align-items: center;

@@ -2071,70 +2071,38 @@ const nameOrCode = (item, q) =>
 
 
 /* ==================== Закрепление общей шапки (дата/вкладки/⋮ + поиск) ====================
-   Подтверждено на реальном устройстве: в установленном на «Домой» PWA
-   нативный CSS position:sticky НЕ срабатывает — шапка просто уезжает вместе
-   со списком. Поэтому обязательно нужна JS-подстраховка через
-   position:fixed. Прошлая версия такой подстраховки ломала раскладку при
-   открытии клавиатуры — потому что пересчитывала позицию ещё и по событию
-   "resize" (а клавиатура на iOS тоже вызывает resize видимой области).
-   Тут — только по "scroll", и с паузой, пока в фокусе текстовое поле
-   (клавиатура открыта), чтобы не попасть на промежуточный некорректный
-   размер видимой области во время анимации появления клавиатуры. */
+   Шапка ВСЕГДА position:fixed (см. .sticky-top в style.css) — без
+   переключения между sticky/fixed по прокрутке. Раньше здесь была
+   пороговая логика «прилипает после прокрутки мимо точки N» — именно она
+   раз за разом ломалась в установленном на «Домой» PWA (то не липла
+   вообще, то наезжала на панель добавления). Теперь состояния нет вообще:
+   шапка просто всегда наверху, а распорка (stickyTopPlaceholder) всегда
+   резервирует под неё место в потоке, чтобы контент под ней никогда не
+   перекрывался. Единственное, что делает JS — держит высоту распорки в
+   актуальном состоянии (высота шапки чуть меняется между вкладками). */
 const stickyTopEl = document.getElementById("stickyTop");
 let stickyTopPlaceholder = null;
 if (stickyTopEl) {
   stickyTopPlaceholder = document.createElement("div");
   stickyTopPlaceholder.className = "sticky-top-placeholder";
+  stickyTopPlaceholder.style.marginBottom = "14px";
   stickyTopEl.parentNode.insertBefore(stickyTopPlaceholder, stickyTopEl);
 }
-function getSafeAreaTopPx() {
-  const probe = document.createElement("div");
-  probe.style.cssText = "position:fixed; top:0; height:0; padding-top:env(safe-area-inset-top, 0px); visibility:hidden;";
-  document.body.appendChild(probe);
-  const px = parseFloat(getComputedStyle(probe).paddingTop) || 0;
-  document.body.removeChild(probe);
-  return px;
-}
-const STICKY_THRESHOLD = Math.max(6, getSafeAreaTopPx());
 function isTypingNow() {
   const el = document.activeElement;
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT");
 }
-function updateStickySearch() {
+function syncStickyTopHeight() {
   if (!stickyTopEl || !stickyTopPlaceholder) return;
-  if (isTypingNow()) return; // клавиатура может ещё анимироваться — не трогаем
-  const page = document.querySelector(".page");
-  if (!page) return;
-  const pinned = stickyTopEl.classList.contains("js-pinned");
-  if (!pinned) {
-    // window.scrollY > 4 — защита от ложного срабатывания сразу при
-    // открытии страницы: в самом верху позиция шапки может случайно
-    // почти совпасть с порогом фиксации ещё ДО реальной прокрутки.
-    const top = stickyTopEl.getBoundingClientRect().top;
-    if (window.scrollY > 4 && top <= STICKY_THRESHOLD) {
-      const rect = stickyTopEl.getBoundingClientRect();
-      const pageRect = page.getBoundingClientRect();
-      stickyTopPlaceholder.style.height = rect.height + "px";
-      stickyTopPlaceholder.style.display = "block";
-      stickyTopEl.classList.add("js-pinned");
-      stickyTopEl.style.left = pageRect.left + "px";
-      stickyTopEl.style.width = pageRect.width + "px";
-    }
-  } else {
-    const phTop = stickyTopPlaceholder.getBoundingClientRect().top;
-    if (phTop > STICKY_THRESHOLD + 2) {
-      stickyTopEl.classList.remove("js-pinned");
-      stickyTopEl.style.left = stickyTopEl.style.width = "";
-      stickyTopPlaceholder.style.display = "none";
-    } else {
-      const pageRect = page.getBoundingClientRect();
-      stickyTopEl.style.left = pageRect.left + "px";
-      stickyTopEl.style.width = pageRect.width + "px";
-    }
-  }
+  if (isTypingNow()) return; // не пересчитываем во время анимации клавиатуры
+  stickyTopPlaceholder.style.height = stickyTopEl.offsetHeight + "px";
 }
-window.addEventListener("scroll", updateStickySearch, { passive: true });
-updateStickySearch();
+window.addEventListener("resize", syncStickyTopHeight);
+// Оставлено под старым именем, чтобы не переписывать остальные места
+// файла, которые уже вызывают updateStickySearch() после смены вкладки,
+// поиска и т.д. — здесь она просто пересчитывает высоту распорки.
+function updateStickySearch() { syncStickyTopHeight(); }
+syncStickyTopHeight();
 
 
 /* ==================== Отмена / повтор на «Складе» ==================== */
