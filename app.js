@@ -2107,8 +2107,11 @@ function updateStickySearch() {
   if (!page) return;
   const pinned = stickyTopEl.classList.contains("js-pinned");
   if (!pinned) {
+    // window.scrollY > 4 — защита от ложного срабатывания сразу при
+    // открытии страницы: в самом верху позиция шапки может случайно
+    // почти совпасть с порогом фиксации ещё ДО реальной прокрутки.
     const top = stickyTopEl.getBoundingClientRect().top;
-    if (top <= STICKY_THRESHOLD) {
+    if (window.scrollY > 4 && top <= STICKY_THRESHOLD) {
       const rect = stickyTopEl.getBoundingClientRect();
       const pageRect = page.getBoundingClientRect();
       stickyTopPlaceholder.style.height = rect.height + "px";
