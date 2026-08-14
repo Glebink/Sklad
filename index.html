@@ -303,25 +303,16 @@
   </div>
 </div>
 
-<!-- Модалка печати этикетки: ручной ввод -->
+<!-- Модалка печати этикеток: ручной ввод, мини-таблица из нескольких позиций -->
 <div class="modal-overlay" id="printLabelOverlay">
-  <div class="modal-box">
-    <p>Печать этикетки (ручной ввод):</p>
-    <div style="display:flex; gap:10px; align-items:flex-start;">
-      <div style="flex:1; min-width:0;">
-        <div class="field-label">Название *</div>
-        <input type="text" id="printLabelName" placeholder="Название товара">
-        <div class="field-label">Код</div>
-        <input type="text" id="printLabelCode" placeholder="необязательно">
-      </div>
-      <div style="width:84px; flex:0 0 auto;">
-        <div class="field-label">Шт (в углу)</div>
-        <input type="number" id="printLabelQty" min="0" placeholder="—">
-      </div>
-    </div>
+  <div class="modal-box wide">
+    <p>Печать</p>
+    <div id="printLabelRows"></div>
+    <button class="util" id="printLabelAddRow" style="width:100%; font-size:22px; font-weight:700; margin-top:6px;" title="Добавить ещё позицию">+</button>
     <div class="sync-help" style="margin-top:8px;">
-      «Шт» печатается в правом нижнем углу этикетки (необязательно).
-      Лист всегда заполняется 10 одинаковыми этикетками.
+      «Шт» печатается в углу этикетки (необязательно). «Кол-во копий» —
+      сколько этикеток этой позиции разместить на листе (пусто = 1).
+      Лист вмещает 10 этикеток, дальше — новый лист.
     </div>
     <div class="modal-actions">
       <button class="confirm-no" id="printLabelCancel">Отмена</button>

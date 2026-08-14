@@ -934,18 +934,92 @@ function buildManualLabelHtml(name, code, qty) {
     ${qty ? `<div class="print-label-qty">${escapeHtml(qty)} шт</div>` : ""}
   </div>`;
 }
-function printManualLabels(name, code, qty) {
-  const labelHtml = buildManualLabelHtml(name, code, qty);
-  const printArea = document.getElementById("printArea");
-  printArea.innerHTML = `<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 80mm);">${labelHtml.repeat(10)}</div></div>`;
+const MANUAL_LABELS_PER_PAGE = 10; // 2x5
+// entries — массив { name, code, qty, copies } собирается из всех строк
+// мини-таблицы при печати; каждая позиция даёт `copies` одинаковых
+// этикеток, все копии всех позиций складываются в общий список и режутся
+// по MANUAL_LABELS_PER_PAGE на отдельные страницы.
+function printManualLabels(entries) {
+  const allLabels = [];
+  entries.forEach((e) => {
+    const html = buildManualLabelHtml(e.name, e.code, e.qty);
+    const copies = Math.max(1, e.copies || 1);
+    for (let i = 0; i < copies; i++) allLabels.push(html);
+  });
+  const pages = [];
+  for (let i = 0; i < allLabels.length; i += MANUAL_LABELS_PER_PAGE) {
+    const slice = allLabels.slice(i, i + MANUAL_LABELS_PER_PAGE).join("");
+    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 80mm);">${slice}</div></div>`);
+  }
+  document.getElementById("printArea").innerHTML = pages.join("");
   window.print();
 }
 
-/* --- Модалка ручного ввода этикетки (кнопка «⋮» → «🖨️ Печать») --- */
+/* --- Модалка ручного ввода этикеток (кнопка «⋮» → «🖨️ Печать») ====================
+   Мини-таблица: каждая строка — своя позиция (Название+Шт / Код+Кол-во
+   копий), с автоподбором по складу (как в панели добавления «Учёта») и
+   крестиком удаления. «+» снизу добавляет ещё строку. */
+let printLabelRowSeq = 0;
+function createPrintLabelRow() {
+  const id = "plr" + (++printLabelRowSeq);
+  const row = document.createElement("div");
+  row.className = "print-label-row";
+  row.dataset.rowId = id;
+  row.innerHTML = `
+    <button class="plr-del" title="Удалить эту позицию">✕</button>
+    <div class="plr-line">
+      <div class="plr-name-wrap">
+        <input type="text" class="plr-name" placeholder="Название *" autocomplete="off">
+        <div class="suggest-box plr-suggest"></div>
+      </div>
+      <div class="plr-side">
+        <input type="number" class="plr-qty" min="0" placeholder="Шт">
+      </div>
+    </div>
+    <div class="plr-line" style="margin-top:6px;">
+      <div class="plr-name-wrap">
+        <input type="text" class="plr-code" placeholder="Код (необязательно)" autocomplete="off">
+      </div>
+      <div class="plr-side">
+        <input type="number" class="plr-copies" min="1" placeholder="Копий">
+      </div>
+    </div>
+  `;
+  const nameInput = row.querySelector(".plr-name");
+  const codeInput = row.querySelector(".plr-code");
+  const suggestBox = row.querySelector(".plr-suggest");
+  let picked = null;
+  function handleInput() {
+    picked = null;
+    renderSuggestions(suggestBox, nameInput.value || codeInput.value, (r) => {
+      picked = r;
+      nameInput.value = r.name;
+      codeInput.value = r.code || "";
+      suggestBox.classList.remove("open");
+    });
+  }
+  nameInput.addEventListener("input", handleInput);
+  codeInput.addEventListener("input", handleInput);
+  registerSuggestZone(suggestBox, [nameInput, codeInput]);
+  row.querySelector(".plr-del").addEventListener("click", () => {
+    const rows = document.querySelectorAll(".print-label-row");
+    if (rows.length <= 1) {
+      // последнюю строку не удаляем совсем — просто очищаем поля
+      if (!confirm("Очистить эту позицию?")) return;
+      nameInput.value = ""; codeInput.value = "";
+      row.querySelector(".plr-qty").value = "";
+      row.querySelector(".plr-copies").value = "";
+      return;
+    }
+    if (!confirm("Удалить эту позицию?")) return;
+    row.remove();
+  });
+  return row;
+}
 function openPrintLabelModal() {
-  document.getElementById("printLabelName").value = "";
-  document.getElementById("printLabelCode").value = "";
-  document.getElementById("printLabelQty").value = "";
+  const container = document.getElementById("printLabelRows");
+  container.innerHTML = "";
+  container.appendChild(createPrintLabelRow());
   document.getElementById("printLabelOverlay").classList.add("open");
 }
 function closePrintLabelModal() {
@@ -956,17 +1030,32 @@ document.getElementById("printLabelCancel").addEventListener("click", closePrint
 document.getElementById("printLabelOverlay").addEventListener("click", (e) => {
   if (e.target.id === "printLabelOverlay") closePrintLabelModal();
 });
+document.getElementById("printLabelAddRow").addEventListener("click", () => {
+  document.getElementById("printLabelRows").appendChild(createPrintLabelRow());
+});
 document.getElementById("printLabelGo").addEventListener("click", () => {
-  const name = document.getElementById("printLabelName").value.trim();
-  if (!name) {
-    alert("Название обязательно для заполнения.");
-    document.getElementById("printLabelName").focus();
+  const rows = Array.from(document.querySelectorAll(".print-label-row"));
+  const entries = [];
+  let firstEmptyNameInput = null;
+  rows.forEach((row) => {
+    const name = row.querySelector(".plr-name").value.trim();
+    const code = row.querySelector(".plr-code").value.trim();
+    const qty = row.querySelector(".plr-qty").value.trim();
+    const copiesRaw = row.querySelector(".plr-copies").value.trim();
+    const copies = copiesRaw ? Math.max(1, parseInt(copiesRaw, 10) || 1) : 1;
+    if (!name) {
+      if (!firstEmptyNameInput) firstEmptyNameInput = row.querySelector(".plr-name");
+      return; // пустые строки (без названия) просто пропускаем
+    }
+    entries.push({ name, code, qty, copies });
+  });
+  if (entries.length === 0) {
+    alert("Заполните название хотя бы для одной позиции.");
+    if (firstEmptyNameInput) firstEmptyNameInput.focus();
     return;
   }
-  const code = document.getElementById("printLabelCode").value.trim();
-  const qty = document.getElementById("printLabelQty").value.trim();
   closePrintLabelModal();
-  printManualLabels(name, code, qty);
+  printManualLabels(entries);
 });
 
 /* ==================== Переключение даты ==================== */

@@ -536,6 +536,45 @@
 
   .modal-box.wide { max-width: 420px; }
   .modal-box.wide p { text-align: left; }
+
+  /* ==================== Строка формы в модалке печати этикеток ==================== */
+  #printLabelRows { max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .print-label-row {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 32px 4px 10px;
+    margin-top: 10px;
+    text-align: left;
+  }
+  .print-label-row:first-child { margin-top: 0; }
+  .print-label-row .plr-line {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .print-label-row .plr-name-wrap {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+  }
+  .print-label-row .plr-name-wrap input[type="text"] { width: 100%; }
+  .print-label-row .plr-side { width: 72px; flex: 0 0 auto; }
+  .print-label-row .plr-del {
+    position: absolute;
+    top: 8px; right: 8px;
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    border: none;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .print-label-row .plr-del:active { background: #cbd5e1; }
+
   .history-range { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
   .history-range input[type="date"] { flex: 1; padding: 7px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0; }
   .history-range span { font-size: 12px; color: #667; }
@@ -689,6 +728,13 @@
     width: 190mm;   /* A4 минус ожидаемые системные отступы печати ~10мм с каждой стороны */
     min-height: 277mm;
     margin: 0 auto;
+  }
+  /* Несколько позиций из мини-таблицы могут не поместиться на 1 лист —
+     разрыв ставим МЕЖДУ обёртками страниц (каждая отцентрована сама по
+     себе), а не между сетками внутри одной. */
+  #printArea .print-labels-page + .print-labels-page {
+    page-break-before: always;
+    break-before: page;
   }
   #printArea .print-labels-page .print-labels-grid { gap: 3mm; }
   #printArea .print-label.manual {
