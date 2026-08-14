@@ -646,6 +646,10 @@
     display: grid;
     gap: 2mm;
   }
+  #printArea .print-labels-grid + .print-labels-grid {
+    page-break-before: always;
+    break-before: page;
+  }
   #printArea .print-label {
     width: 70mm;
     height: 50mm;
@@ -671,6 +675,61 @@
     font-family: monospace;
     color: #333;
     margin-top: 3mm;
+  }
+
+  /* ==================== Этикетка ручного ввода (⋮ → 🖨️ Печать) ====================
+     Отдельный формат от складской: 8x3.5 см, зазор 3мм, 2x5=10 на лист,
+     блок центрирован на листе (равные отступы со всех сторон). Название
+     стоит на границе 1/2 условных секторов по высоте, код — на границе
+     2/3, количество — в правом нижнем углу. */
+  #printArea .print-labels-page {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 190mm;   /* A4 минус ожидаемые системные отступы печати ~10мм с каждой стороны */
+    min-height: 277mm;
+    margin: 0 auto;
+  }
+  #printArea .print-labels-page .print-labels-grid { gap: 3mm; }
+  #printArea .print-label.manual {
+    position: relative;
+    width: 80mm;
+    height: 35mm;
+    border: 1px solid #999;
+    box-sizing: border-box;
+    overflow: hidden;
+    padding: 0;
+  }
+  #printArea .print-label.manual .print-label-name {
+    position: absolute;
+    left: 3mm; right: 3mm;
+    top: 33.333%;
+    transform: translateY(-50%);
+    text-align: center;
+    font-size: 19pt;
+    font-weight: 700;
+    line-height: 1.15;
+    margin: 0;
+    padding: 0;
+  }
+  #printArea .print-label.manual .print-label-code {
+    position: absolute;
+    left: 3mm; right: 3mm;
+    top: 66.667%;
+    transform: translateY(-50%);
+    text-align: center;
+    font-size: 17pt;
+    font-weight: 700;
+    font-family: monospace;
+    color: #333;
+    margin: 0;
+  }
+  #printArea .print-label.manual .print-label-qty {
+    position: absolute;
+    right: 3mm;
+    bottom: 2.5mm;
+    font-size: 13pt;
+    font-weight: 700;
   }
 
   /* ==================== Блок добавления (Учёт): 1 строка ====================

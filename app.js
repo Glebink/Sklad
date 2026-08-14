@@ -907,20 +907,67 @@ document.getElementById("historyOverlay").addEventListener("click", (e) => {
 });
 
 /* ==================== Печать этикеток для коробок (Склад) ====================
-   Лист A4 landscape, этикетки 7x5 см, зазор 2 мм, лист заполняется
-   максимальным количеством одинаковых этикеток для одного товара.
+   Лист A4, этикетки 7x5 см, зазор 2 мм, 2x4=8 на лист (с запасом под
+   системную печать — Safari добавляет свою шапку/подвал).
    ВАЖНО: используем тот же #printArea + window.print(), что и обычный
    экспорт — открытие через window.open() в установленном на «Домой»
    PWA виснет без адресной строки и кнопки закрытия. */
+function buildWarehouseLabelHtml(name, code) {
+  return `<div class="print-label"><div class="print-label-name">${escapeHtml(name)}</div>${code ? `<div class="print-label-code">${escapeHtml(code)}</div>` : ""}</div>`;
+}
 function printWarehouseLabels(item) {
-  const cols = 2, rows = 4; // с запасом под системную печать (Safari добавляет свою шапку/подвал) — гарантированно 1 лист
-  const name = escapeHtml(item.name);
-  const code = item.code ? escapeHtml(item.code) : "";
-  const labelHtml = `<div class="print-label"><div class="print-label-name">${name}</div>${code ? `<div class="print-label-code">${code}</div>` : ""}</div>`;
+  const labelHtml = buildWarehouseLabelHtml(item.name, item.code || "");
   const printArea = document.getElementById("printArea");
-  printArea.innerHTML = `<div class="print-labels-grid" style="grid-template-columns: repeat(${cols}, 70mm);">${labelHtml.repeat(cols * rows)}</div>`;
+  printArea.innerHTML = `<div class="print-labels-grid" style="grid-template-columns: repeat(2, 70mm);">${labelHtml.repeat(8)}</div>`;
   window.print();
 }
+
+/* ==================== Печать этикетки: ручной ввод ====================
+   Отдельный, более крупный формат — 8x3.5 см, 2x5=10 на лист, лист всегда
+   заполняется целиком одинаковыми копиями (без отдельного поля «копий»).
+   «Шт» — не количество копий, а число, печатаемое В УГЛУ каждой этикетки
+   (например «60 шт») — по желанию, необязательное поле. */
+function buildManualLabelHtml(name, code, qty) {
+  return `<div class="print-label manual">
+    <div class="print-label-name">${escapeHtml(name)}</div>
+    ${code ? `<div class="print-label-code">${escapeHtml(code)}</div>` : ""}
+    ${qty ? `<div class="print-label-qty">${escapeHtml(qty)} шт</div>` : ""}
+  </div>`;
+}
+function printManualLabels(name, code, qty) {
+  const labelHtml = buildManualLabelHtml(name, code, qty);
+  const printArea = document.getElementById("printArea");
+  printArea.innerHTML = `<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 80mm);">${labelHtml.repeat(10)}</div></div>`;
+  window.print();
+}
+
+/* --- Модалка ручного ввода этикетки (кнопка «⋮» → «🖨️ Печать») --- */
+function openPrintLabelModal() {
+  document.getElementById("printLabelName").value = "";
+  document.getElementById("printLabelCode").value = "";
+  document.getElementById("printLabelQty").value = "";
+  document.getElementById("printLabelOverlay").classList.add("open");
+}
+function closePrintLabelModal() {
+  document.getElementById("printLabelOverlay").classList.remove("open");
+}
+document.getElementById("printLabelBtn").addEventListener("click", openPrintLabelModal);
+document.getElementById("printLabelCancel").addEventListener("click", closePrintLabelModal);
+document.getElementById("printLabelOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "printLabelOverlay") closePrintLabelModal();
+});
+document.getElementById("printLabelGo").addEventListener("click", () => {
+  const name = document.getElementById("printLabelName").value.trim();
+  if (!name) {
+    alert("Название обязательно для заполнения.");
+    document.getElementById("printLabelName").focus();
+    return;
+  }
+  const code = document.getElementById("printLabelCode").value.trim();
+  const qty = document.getElementById("printLabelQty").value.trim();
+  closePrintLabelModal();
+  printManualLabels(name, code, qty);
+});
 
 /* ==================== Переключение даты ==================== */
 const dateInput = document.getElementById("reportDate");
