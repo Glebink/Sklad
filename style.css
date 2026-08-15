@@ -574,6 +574,12 @@
     display: flex; align-items: center; justify-content: center;
   }
   .print-label-row .plr-del:active { background: #cbd5e1; }
+  /* Подсказки вынесены в <body> и позиционируются через JS (position:fixed)
+     — иначе их обрезает скролл-контейнер #printLabelRows. */
+  .plr-suggest-fixed {
+    position: fixed !important;
+    z-index: 2000;
+  }
 
   .history-range { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
   .history-range input[type="date"] { flex: 1; padding: 7px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0; }
@@ -744,31 +750,43 @@
     border: 1px solid #999;
     box-sizing: border-box;
     overflow: hidden;
-    padding: 0;
+    padding: 0 3mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
   }
+  /* Без transform: translateY() — в печати Safari это ненадёжно клипается
+     (текст вылезал за рамку этикетки). Вместо этого — обычные блоки
+     высотой ровно в треть этикетки, текст прижат к низу своего блока —
+     значит, он «стоит» ровно на границе между секторами. */
   #printArea .print-label.manual .print-label-name {
-    position: absolute;
-    left: 3mm; right: 3mm;
-    top: 33.333%;
-    transform: translateY(-50%);
+    height: 33.333%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
     text-align: center;
     font-size: 19pt;
     font-weight: 700;
-    line-height: 1.15;
+    line-height: 1.1;
+    overflow: hidden;
     margin: 0;
     padding: 0;
   }
   #printArea .print-label.manual .print-label-code {
-    position: absolute;
-    left: 3mm; right: 3mm;
-    top: 66.667%;
-    transform: translateY(-50%);
+    height: 33.333%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
     text-align: center;
     font-size: 17pt;
     font-weight: 700;
     font-family: monospace;
     color: #333;
+    line-height: 1.1;
+    overflow: hidden;
     margin: 0;
+    padding: 0;
   }
   #printArea .print-label.manual .print-label-qty {
     position: absolute;

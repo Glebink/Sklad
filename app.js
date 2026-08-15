@@ -928,10 +928,12 @@ function printWarehouseLabels(item) {
    «Шт» — не количество копий, а число, печатаемое В УГЛУ каждой этикетки
    (например «60 шт») — по желанию, необязательное поле. */
 function buildManualLabelHtml(name, code, qty) {
+  const qtyNum = parseInt(qty, 10);
+  const showQty = qty && !isNaN(qtyNum) && qtyNum > 0; // "0" или пусто — не печатаем
   return `<div class="print-label manual">
     <div class="print-label-name">${escapeHtml(name)}</div>
     ${code ? `<div class="print-label-code">${escapeHtml(code)}</div>` : ""}
-    ${qty ? `<div class="print-label-qty">${escapeHtml(qty)} шт</div>` : ""}
+    ${showQty ? `<div class="print-label-qty">${qtyNum} шт</div>` : ""}
   </div>`;
 }
 const MANUAL_LABELS_PER_PAGE = 10; // 2x5
@@ -988,9 +990,21 @@ function createPrintLabelRow() {
   const nameInput = row.querySelector(".plr-name");
   const codeInput = row.querySelector(".plr-code");
   const suggestBox = row.querySelector(".plr-suggest");
+  // Подсказки выносим в <body> и позиционируем через position:fixed —
+  // иначе их обрезает скролл-контейнер строк (#printLabelRows), даже с
+  // высоким z-index (overflow родителя обрезает потомков всегда).
+  suggestBox.classList.add("plr-suggest-fixed");
+  document.body.appendChild(suggestBox);
+  function positionSuggestBox() {
+    const r = nameInput.getBoundingClientRect();
+    suggestBox.style.left = r.left + "px";
+    suggestBox.style.width = r.width + "px";
+    suggestBox.style.top = (r.bottom + 4) + "px";
+  }
   let picked = null;
   function handleInput() {
     picked = null;
+    positionSuggestBox();
     renderSuggestions(suggestBox, nameInput.value || codeInput.value, (r) => {
       picked = r;
       nameInput.value = r.name;
@@ -1000,6 +1014,11 @@ function createPrintLabelRow() {
   }
   nameInput.addEventListener("input", handleInput);
   codeInput.addEventListener("input", handleInput);
+  nameInput.addEventListener("focus", positionSuggestBox);
+  codeInput.addEventListener("focus", positionSuggestBox);
+  document.getElementById("printLabelRows").addEventListener("scroll", () => {
+    if (suggestBox.classList.contains("open")) positionSuggestBox();
+  }, { passive: true });
   registerSuggestZone(suggestBox, [nameInput, codeInput]);
   row.querySelector(".plr-del").addEventListener("click", () => {
     const rows = document.querySelectorAll(".print-label-row");
@@ -1012,23 +1031,33 @@ function createPrintLabelRow() {
       return;
     }
     if (!confirm("Удалить эту позицию?")) return;
+    suggestBox.remove();
     row.remove();
   });
   return row;
 }
+function removeDetachedPrintSuggestBoxes() {
+  document.querySelectorAll(".plr-suggest-fixed").forEach((el) => el.remove());
+}
 function openPrintLabelModal() {
+  removeDetachedPrintSuggestBoxes();
   const container = document.getElementById("printLabelRows");
   container.innerHTML = "";
   container.appendChild(createPrintLabelRow());
   document.getElementById("printLabelOverlay").classList.add("open");
 }
 function closePrintLabelModal() {
+  removeDetachedPrintSuggestBoxes();
   document.getElementById("printLabelOverlay").classList.remove("open");
 }
 document.getElementById("printLabelBtn").addEventListener("click", openPrintLabelModal);
 document.getElementById("printLabelCancel").addEventListener("click", closePrintLabelModal);
 document.getElementById("printLabelOverlay").addEventListener("click", (e) => {
-  if (e.target.id === "printLabelOverlay") closePrintLabelModal();
+  if (e.target.id !== "printLabelOverlay") return;
+  // Защита от случайного тапа мимо формы — спрашиваем подтверждение,
+  // а не закрываем сразу (иначе введённые позиции терялись без вопросов).
+  if (!confirm("Закрыть окно печати? Введённые позиции не сохранятся.")) return;
+  closePrintLabelModal();
 });
 document.getElementById("printLabelAddRow").addEventListener("click", () => {
   document.getElementById("printLabelRows").appendChild(createPrintLabelRow());
