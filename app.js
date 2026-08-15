@@ -1014,8 +1014,24 @@ function createPrintLabelRow() {
   }
   nameInput.addEventListener("input", handleInput);
   codeInput.addEventListener("input", handleInput);
-  nameInput.addEventListener("focus", positionSuggestBox);
-  codeInput.addEventListener("focus", positionSuggestBox);
+  // При открытии клавиатуры экран пересчитывается не мгновенно — если
+  // позиционировать сразу на focus, подсказка «залипает» на месте, где
+  // поле было ДО появления клавиатуры (баг именно у первого поля в
+  // модалке — у остальных клавиатура уже открыта, и это не заметно).
+  // Пересчитываем с небольшой задержкой, пока анимация ещё идёт, и на
+  // всех последующих кадрах через requestAnimationFrame — так подсказка
+  // «догоняет» реальное положение поля независимо от строки.
+  function positionSuggestBoxSettled() {
+    positionSuggestBox();
+    requestAnimationFrame(positionSuggestBox);
+    setTimeout(positionSuggestBox, 150);
+    setTimeout(positionSuggestBox, 350);
+  }
+  nameInput.addEventListener("focus", positionSuggestBoxSettled);
+  codeInput.addEventListener("focus", positionSuggestBoxSettled);
+  window.addEventListener("resize", () => {
+    if (suggestBox.classList.contains("open")) positionSuggestBox();
+  });
   document.getElementById("printLabelRows").addEventListener("scroll", () => {
     if (suggestBox.classList.contains("open")) positionSuggestBox();
   }, { passive: true });
