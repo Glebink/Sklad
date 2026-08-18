@@ -588,7 +588,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v62";
+const APP_VERSION = "v63";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -903,7 +903,10 @@ function handleCountClick(e) {
     // (см. setupQtyLongPress) — короткий тап и долгое нажатие делают разное.
     if (btn.classList.contains("chk-toggle")) {
       checked[key] = !checked[key];
-      persistCurrent();
+      // Отметка «учтено» — рабочая пометка для себя, а не изменение данных:
+      // сохраняем только локально, без запуска синхронизации. Иначе при
+      // отметке позиций одна за другой каждый тап дёргал загрузку на сервер.
+      persistCurrentLocalOnly();
       renderSection(section);
     } else if (btn.classList.contains("ca-del-badge")) {
       if (!confirm(`Удалить «${item.name}» из списка?`)) return;
