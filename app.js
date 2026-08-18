@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v52";
+const APP_VERSION = "v55";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -320,10 +320,9 @@ function renderSection(section) {
     tr.dataset.key = key;
     tr.innerHTML = `
       <td class="num">${i + 1}</td>
-      <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
+      <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}${modelLabel ? `<span class="wh-model-badge">${escapeHtml(modelLabel)}</span>` : ""}</td>
       <td class="name">
         ${escapeHtml(item.name)}
-        ${modelLabel ? `<span class="wh-model-badge">${escapeHtml(modelLabel)}</span>` : ""}
         ${guest ? "" : `<button class="ca-del-badge" data-section="${section}" data-index="${i}" title="Удалить строку">🗑</button>`}
       </td>
       <td class="check">
@@ -687,7 +686,7 @@ function renderSuggestionsFrom(box, query, onPick, store, emptyText) {
   }
   box.innerHTML = results.map((r, idx) =>
     `<div class="suggest-item" data-idx="${idx}">
-       <span class="code">${escapeHtml(r.code || "—")}</span> — ${escapeHtml(r.name)}
+       <span class="code">${escapeHtml(r.code || "—")}</span> — ${escapeHtml(r.name)}${r.model ? `<span class="suggest-model">${escapeHtml(r.model)}</span>` : ""}
      </div>`
   ).join("");
   box.classList.add("open");
@@ -955,7 +954,7 @@ function printLabelsV2(entries) {
   const pages = [];
   for (let i = 0; i < allLabels.length; i += LABELS_V2_PER_PAGE) {
     const slice = allLabels.slice(i, i + LABELS_V2_PER_PAGE).join("");
-    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 90mm);">${slice}</div></div>`);
+    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 85mm);">${slice}</div></div>`);
   }
   document.getElementById("printArea").innerHTML = pages.join("");
   window.print();
@@ -1211,8 +1210,8 @@ function renderWarehouseSection(section) {
     const ocInfo = oneCInfoFor(item.code);
     return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
       <td class="num">${i + 1}</td>
-      <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
-      <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${ocInfo ? altNameHtml(item.code, ocInfo, true) : ""}${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}</td>
+      <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}</td>
+      <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${ocInfo ? altNameHtml(item.code, ocInfo, true) : ""}</td>
       <td class="count-merged wh-merged">
         <div class="count-tier count-tier-num">
           <input type="number" min="0" value="${item.qty || 0}" class="whQtyInput"
@@ -2077,11 +2076,10 @@ function renderOneCSection(section) {
     const whInfo = warehouseInfoFor(item.code);
     const diff = whInfo ? whInfo.qty - (item.qty || 0) : null;
     return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
-      <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
+      <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}</td>
       <td class="name">
         <div class="main-name">${escapeHtml(item.name)}</div>
         ${altNameHtml(item.code, whInfo, true)}
-        ${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}
         ${whInfo ? "" : `<button class="oc-addwh oc-addwh-badge" data-section="${section}" data-index="${i}" title="Добавить эту позицию на склад">+</button>`}
       </td>
       <td class="count-merged wh-merged three-tier">

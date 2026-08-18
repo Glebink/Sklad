@@ -290,17 +290,17 @@
     z-index: 2;
   }
   .oc-addwh-badge:active { background: #1d4ed8; }
+  /* Версия модели — серой подписью в ячейке КОДА, отдельной строкой под
+     самим кодом (раньше висела абсолютом в углу ячейки имени). */
   .wh-model-badge {
-    position: absolute;
-    top: 4px;
-    right: 6px;
-    font-size: 11px;
+    display: block;
+    margin-top: 3px;
+    font-size: 10px;
     font-weight: 600;
     color: #94a3b8;
-    background: #f8fafc;
-    padding: 1px 5px;
-    border-radius: 5px;
-    line-height: 1.3;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    line-height: 1.2;
+    white-space: nowrap;
     pointer-events: none;
   }
   .ca-del-badge {
@@ -457,6 +457,15 @@
   .suggest-item:last-child { border-bottom: none; }
   .suggest-item:active, .suggest-item:hover { background: #f1f5f9; }
   .suggest-item .code { font-family: monospace; font-size: 12px; color: #64748b; }
+  /* Версия модели в конце строки подсказки — просто серый текст, без
+     рамок и подложки. */
+  .suggest-item .suggest-model {
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 600;
+    margin-left: 6px;
+    white-space: nowrap;
+  }
   .suggest-empty { padding: 9px 12px; font-size: 13px; color: #94a3b8; }
 
   .app-header .date-picker.hidden { visibility: hidden; }
@@ -765,15 +774,17 @@
      подвал поверх), последний ряд уезжал на 2-й лист. Поэтому центрируем
      через простой фиксированный отступ, без попытки занять весь лист. */
   #printArea .print-labels-page {
-    /* @page margin:0 (см. @media print) — значит вся страница A4 наша,
-       210×297мм. Сетка 180×225мм центрируется точно: по 15мм по бокам и
-       по 36мм сверху/снизу. Раньше Safari добавляла свои поля и подвал
-       поверх наших отступов, из-за чего нижний ряд уезжал на 2-й лист. */
-    width: 180mm;
-    height: 297mm;
-    margin: 0 auto;
-    padding: 36mm 0 0 0;
-    box-sizing: border-box;
+    /* Безопасная печатная область Safari уже, чем полный A4: по бокам он
+       добавляет свои поля (~12-15мм), сверху/снизу — шапку с URL и подвал
+       со страницей (~15-20мм). Поэтому сетка 2x5 сделана 170x220мм
+       (этикетка 85x44) — влезает с запасом 10мм по ширине и ~37мм по
+       высоте. Прижимаем к левому верхнему углу без своих отступов: любые
+       отступы + фиксированная высота 297мм раньше давали переполнение,
+       из-за чего правый столбец обрезался, а нижний ряд уезжал на 2-й лист. */
+    width: 170mm;
+    max-width: 100%;
+    margin: 0;
+    padding: 0;
     background: #fff;
   }
   #printArea .print-labels-page + .print-labels-page {
@@ -782,8 +793,8 @@
   }
   #printArea .print-label.v2 {
     position: relative;
-    width: 90mm;
-    height: 45mm;
+    width: 85mm;
+    height: 44mm;
     border: 1px solid #999;
     box-sizing: border-box;
     overflow: hidden;
@@ -792,8 +803,8 @@
     flex-direction: column;
   }
   #printArea .pl2-row1 {
-    height: 10mm;
-    flex: 0 0 10mm;      /* строго своя высота, не сжимается */
+    height: 9mm;
+    flex: 0 0 9mm;      /* строго своя высота, не сжимается */
     display: flex;
     align-items: center;
     justify-content: space-between;
