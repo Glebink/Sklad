@@ -27,30 +27,12 @@
   }
   .section-head h2.section-title { margin: 0; }
   .section-head .util { margin-top: 0; }
-  .stacked-btns {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .even-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    width: 100%;
-  }
-  .even-row.full-row { flex-basis: 100%; width: 100%; }
   .corner-row {
     display: flex;
     justify-content: space-between;
     gap: 8px;
     flex-basis: 100%;
     width: 100%;
-  }
-  .even-row .util {
-    width: 100%;
-    text-align: center;
-    white-space: nowrap;
-    margin: 0;
   }
   h2.section-title {
     font-size: 16px;
@@ -308,6 +290,19 @@
     z-index: 2;
   }
   .oc-addwh-badge:active { background: #1d4ed8; }
+  .wh-model-badge {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    background: #f8fafc;
+    padding: 1px 5px;
+    border-radius: 5px;
+    line-height: 1.3;
+    pointer-events: none;
+  }
   .ca-del-badge {
     position: absolute;
     right: 6px;
@@ -528,7 +523,22 @@
     flex: 1; padding: 10px 0; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer;
   }
   .modal-actions .confirm-yes { background: var(--danger); color: #fff; }
+  /* Модификатор: подтверждающая кнопка обычного (не опасного) действия —
+     раньше акцентный цвет дублировался инлайном в 9 модалках. */
+  .modal-actions .confirm-yes.accent { background: var(--accent); }
   .modal-actions .confirm-no { background: #e5e7eb; color: #1f2430; }
+  .modal-actions .full-w { width: 100%; }
+  /* Выпадающий список внутри модалки — раньше один и тот же длинный набор
+     свойств дублировался инлайном в трёх формах редактирования. */
+  .modal-box select {
+    width: 100%;
+    padding: 9px;
+    font-size: 14px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background: #fff;
+  }
   .modal-box input[type="text"], .modal-box input[type="number"] {
     width: 100%; padding: 10px; font-size: 15px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;
   }
@@ -642,6 +652,17 @@
     background: #f59e0b;
     border: 2px solid #fff;
   }
+  /* Маленький номер версии файлов (совпадает с CACHE_NAME в sw.js) — в
+     углу шапки, рядом с облачком. Чисто для проверки «долетело» ли
+     обновление на устройство. */
+  #appVersionBadge {
+    flex: 0 0 auto;
+    font-size: 10px;
+    color: #94a3b8;
+    font-weight: 700;
+    align-self: flex-start;
+    margin-top: -2px;
+  }
   .sync-status-line { font-size: 13px; color: #475569; margin: 6px 0 12px 0; text-align: left; }
   .sync-status-line.err { color: var(--danger); }
   .sync-help { font-size: 12px; color: #667; text-align: left; line-height: 1.5; margin-top: 10px; }
@@ -689,111 +710,80 @@
   #printArea thead th { background: #eee; }
   #printArea .print-labels-grid {
     display: grid;
-    gap: 2mm;
+    gap: 0;
   }
   #printArea .print-labels-grid + .print-labels-grid {
     page-break-before: always;
     break-before: page;
   }
-  #printArea .print-label {
-    width: 70mm;
-    height: 50mm;
-    border: 1px solid #999;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    text-align: center;
-    padding: 4mm;
-    box-sizing: border-box;
-    overflow: hidden;
-  }
-  #printArea .print-label-name {
-    font-size: 17pt;
-    font-weight: 700;
-    line-height: 1.2;
-    margin-bottom: auto;
-    padding-top: 2mm;
-  }
-  #printArea .print-label-code {
-    font-size: 20pt;
-    font-family: monospace;
-    color: #333;
-    margin-top: 3mm;
-  }
 
-  /* ==================== Этикетка ручного ввода (⋮ → 🖨️ Печать) ====================
-     Отдельный формат от складской: 8x3.5 см, зазор 3мм, 2x5=10 на лист.
-     Название стоит на границе 1/2 условных секторов по высоте, код — на
-     границе 2/3, количество — в правом нижнем углу.
-     ВАЖНО про центрирование: min-height:277mm (почти вся высота A4)
-     переполнял реальную печатную область (Safari добавляет свои поля и
-     подвал поверх) — последний ряд уезжал на 2-й лист. Вместо этого —
-     просто отступ сверху и авто-центрирование по бокам через фиксированную
-     ширину, без попытки занять всю высоту листа. */
+  /* ==================== Этикетка «большая» (эталон) ====================
+     90x45мм, 2x5=10 на лист — единый дизайн для одиночной печати со
+     склада (🖨️ в строке товара) и для формы ручного ввода (⋮ → 🖨️ Печать).
+     4 условные строки (не рисуем линии — только позиционирование):
+       1) 10мм — модель слева, «N шт» в правом углу
+       2-3) по 10мм — название (короткое — по центру обеих строк, длинное —
+            переносом: 1-я строка в строке 2, 2-я в строке 3)
+       4) 15мм — код, жирным, растянут под ширину/высоту строки
+     ВАЖНО про центрирование: пробовали min-height на всю высоту листа —
+     переполняло реальную печатную область (Safari добавляет свои поля и
+     подвал поверх), последний ряд уезжал на 2-й лист. Поэтому центрируем
+     через простой фиксированный отступ, без попытки занять весь лист. */
   #printArea .print-labels-page {
-    width: 163mm;         /* ровно ширина сетки 2 колонок × 80мм + зазор */
-    margin: 20mm auto 0 auto;
+    width: 180mm;          /* ровно 2 колонки × 90мм, без зазора между ними */
+    margin: 36mm auto 0 auto;
   }
-  /* Несколько позиций из мини-таблицы могут не поместиться на 1 лист —
-     разрыв ставим МЕЖДУ обёртками страниц (каждая начинается с того же
-     верхнего отступа на новом листе). */
   #printArea .print-labels-page + .print-labels-page {
     page-break-before: always;
     break-before: page;
   }
-  #printArea .print-labels-page .print-labels-grid { gap: 3mm; }
-  #printArea .print-label.manual {
+  #printArea .print-label.v2 {
     position: relative;
-    width: 80mm;
-    height: 35mm;
+    width: 90mm;
+    height: 45mm;
     border: 1px solid #999;
     box-sizing: border-box;
     overflow: hidden;
     padding: 0 3mm;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: stretch;
   }
-  /* Без transform: translateY() — в печати Safari это ненадёжно клипается
-     (текст вылезал за рамку этикетки). Вместо этого — обычные блоки
-     высотой ровно в треть этикетки, текст прижат к низу своего блока —
-     значит, он «стоит» ровно на границе между секторами. */
-  #printArea .print-label.manual .print-label-name {
-    height: 33.333%;
+  #printArea .pl2-row1 {
+    height: 10mm;
     display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    text-align: center;
-    font-size: 19pt;
-    font-weight: 700;
-    line-height: 1.1;
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
+    align-items: center;
+    justify-content: space-between;
   }
-  #printArea .print-label.manual .print-label-code {
-    height: 33.333%;
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    text-align: center;
-    font-size: 17pt;
-    font-weight: 700;
-    font-family: monospace;
-    color: #333;
-    line-height: 1.1;
-    overflow: hidden;
-    margin: 0;
-    padding: 0;
-  }
-  #printArea .print-label.manual .print-label-qty {
-    position: absolute;
-    right: 3mm;
-    bottom: 2.5mm;
+  #printArea .pl2-model {
     font-size: 13pt;
     font-weight: 700;
+    color: #111;
+  }
+  #printArea .pl2-qty {
+    font-size: 11pt;
+    font-weight: 700;
+    color: #111;
+  }
+  #printArea .pl2-name {
+    height: 20mm;                 /* строки 2+3 вместе */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 20pt;
+    font-weight: 700;
+    line-height: 10mm;            /* каждая строка ровно = высоте своей условной строки */
+    overflow: hidden;
+  }
+  #printArea .pl2-code {
+    height: 15mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 26pt;
+    font-weight: 700;
+    font-family: monospace;
+    color: #000;
+    overflow: hidden;
   }
 
   /* ==================== Блок добавления (Учёт): 1 строка ====================

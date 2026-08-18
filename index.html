@@ -21,7 +21,7 @@
 <div class="page">
 
 <div class="sticky-top" id="stickyTop">
-  <div class="app-header" id="appHeader">
+  <div class="app-header">
     <div class="date-picker" id="datePickerBox">
       <span id="dateDisplayText">—</span>
       <input type="date" id="reportDate">
@@ -45,6 +45,7 @@
       </div>
     </div>
     <button id="syncBtn" title="Синхронизация">⚙</button>
+    <span id="appVersionBadge" title="Версия файлов (номер кэша)"></span>
   </div>
 
   <div class="add-panel search-bar" id="whSearchBar" style="display:none;"></div>
@@ -118,6 +119,7 @@
     </select>
     <input type="text" id="whNewCode" class="code-input" placeholder="Код">
     <input type="text" id="whNewName" placeholder="Наименование">
+    <input type="text" id="whNewModel" placeholder="Модель" style="width:100px;">
     <input type="number" id="whNewQty" placeholder="Кол-во" min="0" value="0">
     <div class="suggest-box" id="whAddSuggestBox"></div>
     <div class="corner-row full-row">
@@ -237,7 +239,7 @@
   <div class="modal-box" style="position:relative;">
     <p>Изменить позицию:</p>
     <div class="field-label">Раздел</div>
-    <select id="editItemSection" style="width:100%; padding:9px; font-size:14px; border:1px solid var(--border); border-radius:8px; margin-bottom:10px; background:#fff;">
+    <select id="editItemSection">
       <option value="parts">Детали</option>
       <option value="consumables">Расходники</option>
     </select>
@@ -246,7 +248,7 @@
     <div class="suggest-box" id="editSuggestBox" style="left:20px; right:20px;"></div>
     <div class="modal-actions">
       <button class="confirm-no" id="editItemCancel">Отмена</button>
-      <button class="confirm-yes" id="editItemSave" style="background: var(--accent);">Сохранить</button>
+      <button class="confirm-yes accent" id="editItemSave">Сохранить</button>
     </div>
   </div>
 </div>
@@ -259,7 +261,7 @@
     <input type="number" id="qtyAdjustInput" min="1" inputmode="numeric" placeholder="Количество" autocomplete="off">
     <div class="modal-actions">
       <button class="confirm-no" id="qtyAdjustCancel">Отмена</button>
-      <button class="confirm-yes" id="qtyAdjustConfirm" style="background: var(--accent);">Применить</button>
+      <button class="confirm-yes accent" id="qtyAdjustConfirm">Применить</button>
     </div>
   </div>
 </div>
@@ -285,7 +287,7 @@
   <div class="modal-box">
     <p>Изменить позицию на складе:</p>
     <div class="field-label">Раздел</div>
-    <select id="whEditSection" style="width:100%; padding:9px; font-size:14px; border:1px solid var(--border); border-radius:8px; margin-bottom:10px; background:#fff;">
+    <select id="whEditSection">
       <option value="parts">Детали</option>
       <option value="consumables">Расходники</option>
     </select>
@@ -294,11 +296,19 @@
     <div class="field-label">Наименование</div>
     <input type="text" id="whEditName">
     <div class="suggest-box" id="whEditSuggestBox" style="left:20px; right:20px;"></div>
-    <div class="field-label">Количество на складе</div>
-    <input type="number" id="whEditQty" min="0">
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1; min-width:0;">
+        <div class="field-label">Кол-во на складе</div>
+        <input type="number" id="whEditQty" min="0">
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div class="field-label">Модель</div>
+        <input type="text" id="whEditModel" placeholder="напр. YGW 5.0">
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="confirm-no" id="whEditCancel">Отмена</button>
-      <button class="confirm-yes" id="whEditSave" style="background: var(--accent);">Сохранить</button>
+      <button class="confirm-yes accent" id="whEditSave">Сохранить</button>
     </div>
   </div>
 </div>
@@ -316,7 +326,7 @@
     </div>
     <div class="modal-actions">
       <button class="confirm-no" id="printLabelCancel">Отмена</button>
-      <button class="confirm-yes" id="printLabelGo" style="background: var(--accent);">🖨️ Печать</button>
+      <button class="confirm-yes accent" id="printLabelGo">🖨️ Печать</button>
     </div>
   </div>
 </div>
@@ -326,7 +336,7 @@
   <div class="modal-box">
     <p>Что выгрузить в PDF?</p>
     <div class="modal-actions" style="flex-direction:column; gap:8px;">
-      <button class="confirm-yes" id="ocExportAll" style="background: var(--accent); width:100%;">Все позиции</button>
+      <button class="confirm-yes accent full-w" id="ocExportAll">Все позиции</button>
       <button class="confirm-yes" id="ocExportDiff" style="background:#0f766e; width:100%;">Только расхождения (+ / −)</button>
       <button class="confirm-yes" id="ocExportPlus" style="background:#16a34a; width:100%;">Только + (излишки)</button>
       <button class="confirm-yes" id="ocExportMinus" style="background:#c62828; width:100%;">Только − (недостачи)</button>
@@ -359,7 +369,7 @@
   <div class="modal-box">
     <p>Изменить позицию 1C:</p>
     <div class="field-label">Раздел</div>
-    <select id="ocEditSection" style="width:100%; padding:9px; font-size:14px; border:1px solid var(--border); border-radius:8px; margin-bottom:10px; background:#fff;">
+    <select id="ocEditSection">
       <option value="parts">Детали</option>
       <option value="consumables">Расходники</option>
     </select>
@@ -371,7 +381,7 @@
     <input type="number" id="ocEditQty" min="0">
     <div class="modal-actions">
       <button class="confirm-no" id="ocEditCancel">Отмена</button>
-      <button class="confirm-yes" id="ocEditSave" style="background: var(--accent);">Сохранить</button>
+      <button class="confirm-yes accent" id="ocEditSave">Сохранить</button>
     </div>
   </div>
 </div>
@@ -384,7 +394,7 @@
     <div class="footer-note" id="whTransferHint" style="margin-top:6px;"></div>
     <div class="modal-actions" style="margin-top:10px;">
       <button class="confirm-no" id="whTransferClose">Закрыть</button>
-      <button class="confirm-yes" id="whTransferAction" style="background: var(--accent);">Скопировать</button>
+      <button class="confirm-yes accent" id="whTransferAction">Скопировать</button>
     </div>
   </div>
 </div>
@@ -416,7 +426,7 @@
     <input type="text" id="syncGistIdInput" placeholder="автоматически">
     <div class="modal-actions">
       <button class="confirm-no" id="syncClose">Закрыть</button>
-      <button class="confirm-yes" id="syncSaveBtn" style="background: var(--accent);">Сохранить и синхр.</button>
+      <button class="confirm-yes accent" id="syncSaveBtn">Сохранить и синхр.</button>
     </div>
     <div class="modal-actions" style="margin-top:6px;">
       <button class="confirm-no" id="syncPullBtn" style="background:#e2e8f0;">⇩ Обновить с сервера</button>
@@ -435,26 +445,6 @@
   </div>
 </div>
 
-<!-- Модалка: конфликт синхронизации (на сервере уже есть более новые данные с другого устройства) -->
-<div class="modal-overlay" id="syncConflictOverlay">
-  <div class="modal-box wide">
-    <p style="font-weight:700;">⚠ Есть более свежие данные на сервере</p>
-    <div class="sync-status-line" id="syncConflictInfo" style="color:#1f2430;">
-      Похоже, кто-то (может быть, вы же на другом устройстве) сохранил данные после вашей последней синхронизации.
-      Чтобы ничего не потерять, выберите, что сделать с вашими текущими изменениями на <b>этом</b> устройстве.
-    </div>
-    <div class="modal-actions" style="margin-top:10px; flex-direction:column; gap:8px;">
-      <button class="confirm-yes" id="syncConflictTakeRemote" style="background: var(--accent); width:100%;">⇩ Загрузить версию с сервера (мои правки на этом устройстве потеряются)</button>
-      <button class="confirm-no" id="syncConflictKeepLocal" style="background:#fecaca; width:100%;">⇧ Сохранить мою версию поверх (правки на другом устройстве потеряются)</button>
-      <button class="confirm-no" id="syncConflictLater" style="background:#e2e8f0; width:100%;">Отложить (спросить позже)</button>
-    </div>
-    <div class="sync-help">
-      Это происходит, если два устройства редактировали данные почти одновременно. Приложение не может само понять,
-      какая версия правильная — выберите вручную.
-    </div>
-  </div>
-</div>
-
 <!-- Модалка: история сохранений (когда и что синхронизировалось) -->
 <div class="modal-overlay" id="syncHistoryOverlay">
   <div class="modal-box wide">
@@ -464,7 +454,7 @@
     </div>
     <div id="syncHistoryList" class="sync-history-list"></div>
     <div class="modal-actions" style="margin-top:10px;">
-      <button class="confirm-yes" id="syncHistoryClose" style="background: var(--accent); width:100%;">Закрыть</button>
+      <button class="confirm-yes accent full-w" id="syncHistoryClose">Закрыть</button>
     </div>
   </div>
 </div>

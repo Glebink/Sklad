@@ -50,10 +50,18 @@ document.addEventListener("click", function (e) {
 });
 document.addEventListener("pointerup", handleTabPress);   // страховка для тачскрина
 
+// Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
+// (при каждом поднятии кэша меняем и тут). Просто отображается в углу
+// шапки — чтобы проверить, долетело ли обновление до устройства.
+const APP_VERSION = "v46";
+{
+  const el = document.getElementById("appVersionBadge");
+  if (el) el.textContent = APP_VERSION;
+}
+
 const DATA_BY_DATE_KEY = "potreblenie_data_by_date_v3";
 const LAST_DATE_KEY = "potreblenie_last_date_v1";
 const WAREHOUSE_KEY = "potreblenie_warehouse_v1";
-const CLIPBOARD_KEY = "potreblenie_clipboard_day_v1";
 
 const MONTHS_FULL_GEN = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
 
@@ -113,20 +121,9 @@ function saveWarehouse() {
 function saveWarehouseLocalOnly() {
   try { localStorage.setItem(WAREHOUSE_KEY, JSON.stringify(warehouse)); } catch (e) {}
 }
-function loadClipboard() {
-  try {
-    const raw = localStorage.getItem(CLIPBOARD_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch (e) { return null; }
-}
-function saveClipboard() {
-  try { localStorage.setItem(CLIPBOARD_KEY, JSON.stringify(clipboardDay)); } catch (e) {}
-}
 
 let dataByDate = loadDataByDate();
-let warehouse = loadWarehouse(); // { parts: [{code,name,qty}], consumables: [...] }
-let clipboardDay = loadClipboard(); // { parts:[{name,code}], consumables:[...] } | null
+let warehouse = loadWarehouse(); // { parts: [{code,name,qty,model}], consumables: [...] }
 // Дата при каждом открытии приложения — всегда сегодняшняя (а не та, на которой
 // остановились в прошлый раз): открыли на следующий день — календарь сам на нём.
 let currentDate = todayStr();
@@ -669,7 +666,7 @@ function searchStore(store, query) {
       const name = (item.name || "").toLowerCase();
       const code = (item.code || "").toLowerCase();
       if (name.includes(q) || code.includes(q)) {
-        results.push({ section, code: item.code || "", name: item.name });
+        results.push({ section, code: item.code || "", name: item.name, model: item.model || "" });
       }
     });
   });
@@ -906,55 +903,63 @@ document.getElementById("historyOverlay").addEventListener("click", (e) => {
   if (e.target.id === "historyOverlay") closeHistory();
 });
 
-/* ==================== Печать этикеток для коробок (Склад) ====================
-   Лист A4, этикетки 7x5 см, зазор 2 мм, 2x4=8 на лист (с запасом под
-   системную печать — Safari добавляет свою шапку/подвал).
+/* ==================== Печать этикеток (эталон «большая») ====================
+   90x45мм, 2x5=10 на лист. 4 условные строки высотой (10/10/10/15мм):
+   1 — модель слева, «N шт» в правом углу; 2-3 — название (1 строка по
+   центру обеих, длинное — переносом на 2); 4 — код, жирным, крупным
+   шрифтом, растянутым под ширину/высоту строки. Единый дизайн — и для
+   разовой печати со склада, и для формы ручного ввода.
    ВАЖНО: используем тот же #printArea + window.print(), что и обычный
    экспорт — открытие через window.open() в установленном на «Домой»
    PWA виснет без адресной строки и кнопки закрытия. */
-function buildWarehouseLabelHtml(name, code) {
-  return `<div class="print-label"><div class="print-label-name">${escapeHtml(name)}</div>${code ? `<div class="print-label-code">${escapeHtml(code)}</div>` : ""}</div>`;
+function fitCodeFontPt(text, maxWidthMm, startPt, minPt) {
+  const canvas = fitCodeFontPt._canvas || (fitCodeFontPt._canvas = document.createElement("canvas"));
+  const ctx = canvas.getContext("2d");
+  const mmToPx = 96 / 25.4;
+  const maxWidthPx = maxWidthMm * mmToPx;
+  let pt = startPt;
+  while (pt > minPt) {
+    const px = pt * 96 / 72;
+    ctx.font = `700 ${px}px monospace`;
+    if (ctx.measureText(text).width <= maxWidthPx) break;
+    pt -= 1;
+  }
+  return pt;
 }
-function printWarehouseLabels(item) {
-  const labelHtml = buildWarehouseLabelHtml(item.name, item.code || "");
-  const printArea = document.getElementById("printArea");
-  printArea.innerHTML = `<div class="print-labels-grid" style="grid-template-columns: repeat(2, 70mm);">${labelHtml.repeat(8)}</div>`;
-  window.print();
-}
-
-/* ==================== Печать этикетки: ручной ввод ====================
-   Отдельный, более крупный формат — 8x3.5 см, 2x5=10 на лист, лист всегда
-   заполняется целиком одинаковыми копиями (без отдельного поля «копий»).
-   «Шт» — не количество копий, а число, печатаемое В УГЛУ каждой этикетки
-   (например «60 шт») — по желанию, необязательное поле. */
-function buildManualLabelHtml(name, code, qty) {
+function buildLabelHtmlV2(name, code, qty, model) {
   const qtyNum = parseInt(qty, 10);
   const showQty = qty && !isNaN(qtyNum) && qtyNum > 0; // "0" или пусто — не печатаем
-  return `<div class="print-label manual">
-    <div class="print-label-name">${escapeHtml(name)}</div>
-    ${code ? `<div class="print-label-code">${escapeHtml(code)}</div>` : ""}
-    ${showQty ? `<div class="print-label-qty">${qtyNum} шт</div>` : ""}
+  const codeSize = code ? fitCodeFontPt(code, 84, 26, 14) : 26; // 90мм - 2×3мм полей
+  return `<div class="print-label v2">
+    <div class="pl2-row1">
+      <span class="pl2-model">${model ? escapeHtml(model) : ""}</span>
+      <span class="pl2-qty">${showQty ? qtyNum + " шт" : ""}</span>
+    </div>
+    <div class="pl2-name">${escapeHtml(name)}</div>
+    ${code ? `<div class="pl2-code" style="font-size:${codeSize}pt;">${escapeHtml(code)}</div>` : ""}
   </div>`;
 }
-const MANUAL_LABELS_PER_PAGE = 10; // 2x5
-// entries — массив { name, code, qty, copies } собирается из всех строк
-// мини-таблицы при печати; каждая позиция даёт `copies` одинаковых
-// этикеток, все копии всех позиций складываются в общий список и режутся
-// по MANUAL_LABELS_PER_PAGE на отдельные страницы.
-function printManualLabels(entries) {
+const LABELS_V2_PER_PAGE = 10; // 2x5, 90x45мм
+function printLabelsV2(entries) {
   const allLabels = [];
   entries.forEach((e) => {
-    const html = buildManualLabelHtml(e.name, e.code, e.qty);
+    const html = buildLabelHtmlV2(e.name, e.code, e.qty, e.model);
     const copies = Math.max(1, e.copies || 1);
     for (let i = 0; i < copies; i++) allLabels.push(html);
   });
   const pages = [];
-  for (let i = 0; i < allLabels.length; i += MANUAL_LABELS_PER_PAGE) {
-    const slice = allLabels.slice(i, i + MANUAL_LABELS_PER_PAGE).join("");
-    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 80mm);">${slice}</div></div>`);
+  for (let i = 0; i < allLabels.length; i += LABELS_V2_PER_PAGE) {
+    const slice = allLabels.slice(i, i + LABELS_V2_PER_PAGE).join("");
+    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 90mm);">${slice}</div></div>`);
   }
   document.getElementById("printArea").innerHTML = pages.join("");
   window.print();
+}
+function printWarehouseLabels(item) {
+  printLabelsV2([{ name: item.name, code: item.code || "", model: item.model || "", copies: LABELS_V2_PER_PAGE }]);
+}
+function printManualLabels(entries) {
+  printLabelsV2(entries);
 }
 
 /* --- Модалка ручного ввода этикеток (кнопка «⋮» → «🖨️ Печать») ====================
@@ -986,9 +991,16 @@ function createPrintLabelRow() {
         <input type="number" class="plr-copies" min="1" placeholder="Копий">
       </div>
     </div>
+    <div class="plr-line" style="margin-top:6px;">
+      <div class="plr-name-wrap">
+        <input type="text" class="plr-model" placeholder="Модель (напр. YGW 5.0)" autocomplete="off">
+      </div>
+      <div class="plr-side"></div>
+    </div>
   `;
   const nameInput = row.querySelector(".plr-name");
   const codeInput = row.querySelector(".plr-code");
+  const modelInput = row.querySelector(".plr-model");
   const suggestBox = row.querySelector(".plr-suggest");
   // Подсказки выносим в <body> и позиционируем через position:fixed —
   // иначе их обрезает скролл-контейнер строк (#printLabelRows), даже с
@@ -1001,47 +1013,43 @@ function createPrintLabelRow() {
     suggestBox.style.width = r.width + "px";
     suggestBox.style.top = (r.bottom + 4) + "px";
   }
+  // Пока подсказка открыта — пересчитываем её позицию КАЖДЫЙ кадр. Так она
+  // всегда «прилипает» строго под полем названия этой строки, независимо
+  // от того, сколько ещё длится анимация клавиатуры/прокрутки (раньше
+  // пробовали пересчитать пару раз с задержкой — не всегда успевало).
+  let followRaf = null;
+  function followSuggestBox() {
+    if (!suggestBox.classList.contains("open")) { followRaf = null; return; }
+    positionSuggestBox();
+    followRaf = requestAnimationFrame(followSuggestBox);
+  }
+  function startFollowing() {
+    positionSuggestBox();
+    if (followRaf === null) followRaf = requestAnimationFrame(followSuggestBox);
+  }
   let picked = null;
   function handleInput() {
     picked = null;
-    positionSuggestBox();
     renderSuggestions(suggestBox, nameInput.value || codeInput.value, (r) => {
       picked = r;
       nameInput.value = r.name;
       codeInput.value = r.code || "";
+      modelInput.value = r.model || ""; // модель — как и код, подставляется автоматически из склада
       suggestBox.classList.remove("open");
     });
+    startFollowing();
   }
   nameInput.addEventListener("input", handleInput);
   codeInput.addEventListener("input", handleInput);
-  // При открытии клавиатуры экран пересчитывается не мгновенно — если
-  // позиционировать сразу на focus, подсказка «залипает» на месте, где
-  // поле было ДО появления клавиатуры (баг именно у первого поля в
-  // модалке — у остальных клавиатура уже открыта, и это не заметно).
-  // Пересчитываем с небольшой задержкой, пока анимация ещё идёт, и на
-  // всех последующих кадрах через requestAnimationFrame — так подсказка
-  // «догоняет» реальное положение поля независимо от строки.
-  function positionSuggestBoxSettled() {
-    positionSuggestBox();
-    requestAnimationFrame(positionSuggestBox);
-    setTimeout(positionSuggestBox, 150);
-    setTimeout(positionSuggestBox, 350);
-  }
-  nameInput.addEventListener("focus", positionSuggestBoxSettled);
-  codeInput.addEventListener("focus", positionSuggestBoxSettled);
-  window.addEventListener("resize", () => {
-    if (suggestBox.classList.contains("open")) positionSuggestBox();
-  });
-  document.getElementById("printLabelRows").addEventListener("scroll", () => {
-    if (suggestBox.classList.contains("open")) positionSuggestBox();
-  }, { passive: true });
+  nameInput.addEventListener("focus", startFollowing);
+  codeInput.addEventListener("focus", startFollowing);
   registerSuggestZone(suggestBox, [nameInput, codeInput]);
   row.querySelector(".plr-del").addEventListener("click", () => {
     const rows = document.querySelectorAll(".print-label-row");
     if (rows.length <= 1) {
       // последнюю строку не удаляем совсем — просто очищаем поля
       if (!confirm("Очистить эту позицию?")) return;
-      nameInput.value = ""; codeInput.value = "";
+      nameInput.value = ""; codeInput.value = ""; modelInput.value = "";
       row.querySelector(".plr-qty").value = "";
       row.querySelector(".plr-copies").value = "";
       return;
@@ -1086,13 +1094,14 @@ document.getElementById("printLabelGo").addEventListener("click", () => {
     const name = row.querySelector(".plr-name").value.trim();
     const code = row.querySelector(".plr-code").value.trim();
     const qty = row.querySelector(".plr-qty").value.trim();
+    const model = row.querySelector(".plr-model").value.trim();
     const copiesRaw = row.querySelector(".plr-copies").value.trim();
     const copies = copiesRaw ? Math.max(1, parseInt(copiesRaw, 10) || 1) : 1;
     if (!name) {
       if (!firstEmptyNameInput) firstEmptyNameInput = row.querySelector(".plr-name");
       return; // пустые строки (без названия) просто пропускаем
     }
-    entries.push({ name, code, qty, copies });
+    entries.push({ name, code, qty, model, copies });
   });
   if (entries.length === 0) {
     alert("Заполните название хотя бы для одной позиции.");
@@ -1178,7 +1187,7 @@ function renderWarehouseSection(section) {
     return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
       <td class="num">${i + 1}</td>
       <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
-      <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${ocInfo ? altNameHtml(item.code, ocInfo, true) : ""}</td>
+      <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${ocInfo ? altNameHtml(item.code, ocInfo, true) : ""}${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}</td>
       <td class="count-merged wh-merged">
         <div class="count-tier count-tier-num">
           <input type="number" min="0" value="${item.qty || 0}" class="whQtyInput"
@@ -1289,6 +1298,7 @@ function openWhEdit(section, index) {
   document.getElementById("whEditCode").value = item.code;
   document.getElementById("whEditName").value = item.name;
   document.getElementById("whEditQty").value = item.qty || 0;
+  document.getElementById("whEditModel").value = item.model || "";
   const box = document.getElementById("whEditSuggestBox");
   if (box) { box.classList.remove("open"); box.innerHTML = ""; }
   document.getElementById("whEditOverlay").classList.add("open");
@@ -1311,6 +1321,7 @@ document.getElementById("whEditSave").addEventListener("click", () => {
   const name = document.getElementById("whEditName").value.trim();
   let qty = parseInt(document.getElementById("whEditQty").value, 10);
   if (isNaN(qty) || qty < 0) qty = 0;
+  const model = document.getElementById("whEditModel").value.trim();
   if (!name) { closeWhEdit(); return; }
   const sectionChanged = newSection !== section;
 
@@ -1330,6 +1341,7 @@ document.getElementById("whEditSave").addEventListener("click", () => {
   const oldItem = warehouse[section][index];
   const oldKey = countKey(section, oldItem);
   const newItem = { code, name, qty };
+  if (model) newItem.model = model;
   const newKey = countKey(newSection, newItem);
   const wasPicked = selectedWH[section].has(oldKey);
 
@@ -1361,14 +1373,18 @@ document.getElementById("whAddBtn").addEventListener("click", () => {
   const section = document.getElementById("whNewSection").value;
   const code = document.getElementById("whNewCode").value.trim();
   const name = document.getElementById("whNewName").value.trim();
+  const model = document.getElementById("whNewModel").value.trim();
   let qty = parseInt(document.getElementById("whNewQty").value, 10);
   if (isNaN(qty) || qty < 0) qty = 0;
   if (!name) return;
   pushWhHistory();
-  warehouse[section].push({ code, name, qty });
+  const newItem = { code, name, qty };
+  if (model) newItem.model = model;
+  warehouse[section].push(newItem);
   saveWarehouse();
   document.getElementById("whNewCode").value = "";
   document.getElementById("whNewName").value = "";
+  document.getElementById("whNewModel").value = "";
   document.getElementById("whNewQty").value = "0";
   const addBox = document.getElementById("whAddSuggestBox");
   if (addBox) { addBox.classList.remove("open"); addBox.innerHTML = ""; }
@@ -2616,7 +2632,6 @@ let syncTimer = null;
 let syncInFlight = false;
 let syncQueued = false; // изменение пришло, пока предыдущая отправка ещё была в процессе — досылаем её сразу после
 let applyingRemote = false;
-let pendingConflict = null; // { remotePayload, localPayload } — пока пользователь не выбрал вариант
 
 /* ---- Отслеживание "есть ли несохранённые на сервере изменения" ---- */
 function getLocalUpdatedAt() { return Number(localStorage.getItem(LOCAL_UPDATED_AT_KEY) || 0); }
@@ -3045,56 +3060,13 @@ async function pushToGistNow() {
   } finally {
     syncInFlight = false;
     // Пока мы отправляли этот запрос, пришло ещё одно изменение — досылаем
-    // его сейчас же (но не тогда, когда одновременно открыта модалка
-    // конфликта: сначала пусть пользователь решит, что делать с текущим).
-    if (syncQueued && !pendingConflict) {
+    // его сейчас же.
+    if (syncQueued) {
       syncQueued = false;
       pushToGistNow();
     }
   }
 }
-
-// Показывает модалку "на сервере более новые данные" и ждёт решения пользователя.
-function showSyncConflict(remotePayload, localPayload) {
-  pendingConflict = { remotePayload, localPayload };
-  setSyncStatus("err", "Конфликт: на сервере есть более новые данные — выберите вариант (⚙)");
-  document.getElementById("syncConflictOverlay").classList.add("open");
-}
-function closeSyncConflict() {
-  document.getElementById("syncConflictOverlay").classList.remove("open");
-}
-document.getElementById("syncConflictTakeRemote").addEventListener("click", () => {
-  if (!pendingConflict) return;
-  applySyncPayload(pendingConflict.remotePayload);
-  markSyncedTo(pendingConflict.remotePayload.updatedAt, pendingConflict.remotePayload, "pull");
-  setSyncStatus("ok", "Загружена версия с сервера: " + new Date().toLocaleTimeString().slice(0, 5));
-  pendingConflict = null;
-  closeSyncConflict();
-});
-document.getElementById("syncConflictKeepLocal").addEventListener("click", async () => {
-  if (!pendingConflict) return;
-  const { token, gistId } = getSyncConfig();
-  const payload = buildSyncPayload(); // берём самые свежие данные, а не снимок на момент конфликта
-  pendingConflict = null;
-  closeSyncConflict();
-  try {
-    setSyncStatus("syncing", "Сохранение вашей версии…");
-    await githubGistRequest("PATCH", "https://api.github.com/gists/" + gistId, token, {
-      files: {
-        [SYNC_FILENAME]: { content: JSON.stringify(payload) },
-        [SYNC_HISTORY_FILENAME]: { content: JSON.stringify(syncHistory) }
-      }
-    });
-    markSyncedTo(payload.updatedAt, payload, "push");
-    setSyncStatus("ok", "Синхронизировано: " + new Date().toLocaleTimeString().slice(0, 5));
-  } catch (e) {
-    setSyncStatus("err", "Не удалось сохранить: " + e.message);
-  }
-});
-document.getElementById("syncConflictLater").addEventListener("click", () => {
-  pendingConflict = null;
-  closeSyncConflict();
-});
 
 function scheduleSync() {
   if (applyingRemote) return;          // это мы сами только что применили данные с сервера
