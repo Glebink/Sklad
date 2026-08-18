@@ -182,6 +182,7 @@
     <input type="text" id="ocNewCode" class="code-input" placeholder="Код">
     <input type="text" id="ocNewName" placeholder="Наименование">
     <button class="btn plus" id="ocAddBtn" style="width:auto; padding:0 16px;">+ Добавить</button>
+    <button class="util" id="ocImportBtn" title="Импорт остатков из Excel">⬆ Импорт</button>
   </div>
 
   <div class="section-head">
@@ -385,8 +386,20 @@
     <input type="text" id="ocEditCode">
     <div class="field-label">Наименование</div>
     <input type="text" id="ocEditName">
-    <div class="field-label">Количество</div>
-    <input type="number" id="ocEditQty" min="0">
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1; min-width:0;">
+        <div class="field-label">Количество</div>
+        <input type="number" id="ocEditQty" min="0">
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div class="field-label">Модель</div>
+        <div class="model-switch" id="ocEditModel" data-value="">
+          <button type="button" class="ms-opt" data-model="YGW 4.0">4.0</button>
+          <button type="button" class="ms-opt" data-model="">—</button>
+          <button type="button" class="ms-opt" data-model="YGW 5.0">5.0</button>
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="confirm-no" id="ocEditCancel">Отмена</button>
       <button class="confirm-yes accent" id="ocEditSave">Сохранить</button>
@@ -395,6 +408,28 @@
 </div>
 
 <!-- Модалка копирования/вставки списка склада (для переноса в другой файл) -->
+<!-- Модалка: импорт остатков из Excel в 1С -->
+<div class="modal-overlay" id="ocImportOverlay">
+  <div class="modal-box wide">
+    <p style="font-weight:700;">Импорт остатков в 1С</p>
+    <div class="footer-note" style="margin-bottom:6px;">
+      Скопируйте из Excel столбцы <b>Код</b>, <b>Наименование</b>, <b>Остаток</b>
+      (можно с заголовком) и вставьте сюда. Порядок столбцов определяется
+      автоматически.
+    </div>
+    <textarea id="ocImportArea" style="width:100%; min-height:150px; font-family:monospace; font-size:12px; padding:8px; border:1px solid var(--border); border-radius:8px; box-sizing:border-box;" placeholder="Вставьте строки из Excel"></textarea>
+    <div class="footer-note" id="ocImportHint" style="margin-top:6px;">
+      Существующие позиции: обновится только остаток (название, код и связь
+      с учётом не трогаются). Новые позиции добавятся в 1С.
+      Модель проставится автоматически по метке в названии.
+    </div>
+    <div class="modal-actions" style="margin-top:10px;">
+      <button class="confirm-no" id="ocImportClose">Отмена</button>
+      <button class="confirm-yes accent" id="ocImportRun">Импортировать</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="whTransferOverlay">
   <div class="modal-box wide">
     <p id="whTransferTitle" style="font-weight:700;">Список</p>

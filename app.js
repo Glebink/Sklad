@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v48";
+const APP_VERSION = "v50";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1619,6 +1619,113 @@ function showSearchBarFor(tab) {
   updateStickySearch();
 }
 
+/* ==================== Импорт остатков из Excel в 1С ====================
+   Вставляем строки из Excel (Код / Наименование / Остаток — в любом
+   порядке, заголовок распознаётся и пропускается). Правила слияния:
+     • позиция уже есть в 1С (по коду, а если кода нет — по названию) →
+       обновляем ТОЛЬКО остаток; название, код и связь со складом/учётом
+       не трогаем;
+     • позиции нет в 1С → добавляем новую (модель проставится
+       автоматически по метке в названии);
+     • склад не изменяется вообще — импорт только в 1С. */
+function parseExcelRows(raw) {
+  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const rows = [];
+  lines.forEach((line) => {
+    // Excel копирует через табы; поддержим и «;» как запасной разделитель
+    const cells = (line.includes("\t") ? line.split("\t") : line.split(";")).map((c) => c.trim());
+    if (cells.length < 2) return;
+    rows.push(cells);
+  });
+  if (rows.length === 0) return [];
+  // Определяем, какой столбец что означает: ищем заголовок, иначе — по виду
+  let header = null;
+  const first = rows[0].map((c) => c.toLowerCase());
+  if (first.some((c) => /код|наимен|назван|остат|кол-?во|количест/.test(c))) header = first;
+  let iCode = 0, iName = 1, iQty = 2;
+  if (header) {
+    header.forEach((h, i) => {
+      if (/код|артикул/.test(h)) iCode = i;
+      else if (/наимен|назван|товар/.test(h)) iName = i;
+      else if (/остат|кол-?во|количест|шт/.test(h)) iQty = i;
+    });
+    rows.shift();
+  }
+  const out = [];
+  rows.forEach((cells) => {
+    const code = String(cells[iCode] || "").trim();
+    const name = String(cells[iName] || "").trim();
+    const qtyRaw = String(cells[iQty] || "").replace(/\s|\u00a0/g, "").replace(",", ".");
+    const qty = Math.max(0, Math.round(parseFloat(qtyRaw) || 0));
+    if (!name && !code) return;
+    out.push({ code, name, qty });
+  });
+  return out;
+}
+function findOcItem(code, name) {
+  for (const section of ["parts", "consumables"]) {
+    const list = onec[section];
+    for (let i = 0; i < list.length; i++) {
+      const it = list[i];
+      if (code && it.code && codeVariants(it.code).some((v) => codeVariants(code).includes(v))) {
+        return { section, index: i };
+      }
+    }
+  }
+  if (!name) return null;
+  const target = name.toLowerCase();
+  for (const section of ["parts", "consumables"]) {
+    const list = onec[section];
+    for (let i = 0; i < list.length; i++) {
+      if ((list[i].name || "").toLowerCase() === target) return { section, index: i };
+    }
+  }
+  return null;
+}
+function openOcImport() {
+  document.getElementById("ocImportArea").value = "";
+  document.getElementById("ocImportOverlay").classList.add("open");
+}
+function closeOcImport() {
+  document.getElementById("ocImportOverlay").classList.remove("open");
+}
+document.getElementById("ocImportBtn").addEventListener("click", openOcImport);
+document.getElementById("ocImportClose").addEventListener("click", closeOcImport);
+document.getElementById("ocImportOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "ocImportOverlay") closeOcImport();
+});
+document.getElementById("ocImportRun").addEventListener("click", () => {
+  const raw = document.getElementById("ocImportArea").value.trim();
+  if (!raw) { alert("Вставьте строки из Excel."); return; }
+  const rows = parseExcelRows(raw);
+  if (rows.length === 0) { alert("Не удалось распознать ни одной строки."); return; }
+
+  let updated = 0, added = 0;
+  const pending = [];
+  rows.forEach((r) => {
+    const found = findOcItem(r.code, r.name);
+    if (found) { updated++; pending.push({ type: "update", found, qty: r.qty }); }
+    else { added++; pending.push({ type: "add", row: r }); }
+  });
+  if (!confirm(`Импорт: обновить остаток у ${updated} поз., добавить новых в 1С — ${added}. Склад не изменится. Продолжить?`)) return;
+
+  pushOcHistory();
+  pending.forEach((p) => {
+    if (p.type === "update") {
+      onec[p.found.section][p.found.index].qty = p.qty;   // только остаток
+    } else {
+      const item = { code: p.row.code, name: p.row.name, qty: p.row.qty };
+      const model = detectModelFromName(p.row.name);
+      if (model) item.model = model;
+      onec.parts.push(item);
+    }
+  });
+  saveOneC();
+  renderOneCAll();
+  closeOcImport();
+  alert(`Готово: обновлено ${updated}, добавлено ${added}.`);
+});
+
 /* ==================== Копировать / Вставить список склада (перенос между файлами) ==================== */
 let whTransferMode = null; // { type: 'copy'|'paste', section: 'parts'|'consumables' }
 const whTransferArea = document.getElementById("whTransferArea");
@@ -1732,6 +1839,58 @@ function saveOneCLocalOnly() {
   try { localStorage.setItem(ONEC_KEY, JSON.stringify(onec)); } catch (e) {}
 }
 let onec = loadOneC();
+
+/* ==================== Одноразовая простановка моделей ====================
+   Ищем в названиях метку версии (wind/ygw 5.0 или 4.0) и проставляем поле
+   model. На СКЛАДЕ метку из названия дополнительно вырезаем (она переехала
+   в отдельное поле), в 1С — оставляем как есть, только проставляем модель.
+   Важно: «wind 25» и подобное НЕ трогаем — это не версия 4.0/5.0, там
+   модель остаётся пустой (дефолт «без версии»).
+   Выполняется один раз, факт запуска помечаем в localStorage. */
+/* ==================== Автоопределение модели по названию ====================
+   Метки версии в названиях: «wind/ygw 5.0» и «wind/ygw 25» → YGW 5.0,
+   «wind/ygw 4.0» → YGW 4.0. Где метки нет — модель пустая (без версии).
+   Используется и при разовой миграции, и при добавлении новых позиций
+   (в т.ч. при импорте остатков из Excel). */
+const MODEL_MIGRATION_KEY = "potreblenie_model_migration_v2";
+const MODEL_TAG_RE = /[\(\[]?\s*(?:wind|ygw)\s*(25|[45][.,]0)\s*[\)\]]?/i;
+function detectModelFromName(name) {
+  const m = MODEL_TAG_RE.exec(name || "");
+  if (!m) return "";
+  const tag = m[1].replace(",", ".");
+  if (tag === "25" || tag === "5.0") return "YGW 5.0";
+  if (tag === "4.0") return "YGW 4.0";
+  return "";
+}
+function stripModelTag(name) {
+  return (name || "").replace(MODEL_TAG_RE, "").replace(/\s{2,}/g, " ").trim().replace(/[\s\-–—]+$/, "");
+}
+function runModelMigrationOnce() {
+  if (localStorage.getItem(MODEL_MIGRATION_KEY)) return;
+  let touched = false;
+  ["parts", "consumables"].forEach((section) => {
+    warehouse[section].forEach((it) => {
+      const model = detectModelFromName(it.name);
+      if (!model) return;
+      if (!it.model) it.model = model;
+      const cleaned = stripModelTag(it.name);
+      if (cleaned && cleaned !== it.name) it.name = cleaned;
+      touched = true;
+    });
+    onec[section].forEach((it) => {
+      const model = detectModelFromName(it.name);
+      if (!model || it.model) return;
+      it.model = model;   // в 1С название НЕ чистим
+      touched = true;
+    });
+  });
+  if (touched) {
+    try { localStorage.setItem(WAREHOUSE_KEY, JSON.stringify(warehouse)); } catch (e) {}
+    try { localStorage.setItem(ONEC_KEY, JSON.stringify(onec)); } catch (e) {}
+  }
+  localStorage.setItem(MODEL_MIGRATION_KEY, "1");
+}
+runModelMigrationOnce();
 
 const selectedOC = { parts: new Set(), consumables: new Set() };
 
@@ -1921,6 +2080,7 @@ function renderOneCSection(section) {
       <td class="name">
         <div class="main-name">${escapeHtml(item.name)}</div>
         ${altNameHtml(item.code, whInfo, true)}
+        ${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}
         ${whInfo ? "" : `<button class="oc-addwh oc-addwh-badge" data-section="${section}" data-index="${i}" title="Добавить эту позицию на склад">+</button>`}
       </td>
       <td class="count-merged wh-merged three-tier">
@@ -2042,6 +2202,7 @@ function openOcEdit(section, index) {
   document.getElementById("ocEditCode").value = item.code || "";
   document.getElementById("ocEditName").value = item.name;
   document.getElementById("ocEditQty").value = item.qty || 0;
+  setModelSwitch(document.getElementById("ocEditModel"), item.model || "");
   document.getElementById("ocEditOverlay").classList.add("open");
 }
 function closeOcEdit() {
@@ -2068,8 +2229,10 @@ document.getElementById("ocEditSave").addEventListener("click", () => {
       it.code === code && !(!sectionChanged && i === index));
     if (dup) { alert("Позиция с таким кодом уже есть в этом разделе 1C."); return; }
   }
+  const model = getModelSwitch(document.getElementById("ocEditModel"));
   pushOcHistory();
   const updated = { code, name, qty };
+  if (model) updated.model = model;
   if (sectionChanged) {
     onec[section].splice(index, 1);
     onec[newSection].push(updated);
