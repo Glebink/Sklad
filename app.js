@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v56";
+const APP_VERSION = "v57";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1996,7 +1996,13 @@ function altNameHtml(selfCode, info, clickable) {
   const b = codeVariants(info.code).join("/");
   const codePart = (a === b) ? "" : `<span class="alt-code">${escapeHtml(info.code)}</span> `;
   const cls = "alt-name" + (clickable ? " alt-link" : "");
-  return `<div class="${cls}">${codePart}${escapeHtml(info.name)}</div>`;
+  // Зелёный дубль названия печатаем сокращённо — только первое слово и
+  // многоточие, чтобы не раздувать строку. Полное название остаётся в
+  // подсказке (title), переход по клику между вкладками не меняется.
+  const full = info.name || "";
+  const firstWord = full.split(/\s+/)[0] || "";
+  const short = (full.trim() === firstWord) ? firstWord : firstWord + "…";
+  return `<div class="${cls}" title="${escapeHtml(full)}">${codePart}${escapeHtml(short)}</div>`;
 }
 
 /* Подсветить строки и прокрутить к первой из них */
