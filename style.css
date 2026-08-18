@@ -595,6 +595,37 @@
     margin-top: 0 !important;
   }
 
+  /* ==================== Переключатель модели (3 положения) ====================
+     Слева YGW 4.0 — по центру «—» (без модели) — справа YGW 5.0.
+     Заменил поле ввода: значения всего три, набирать руками незачем. */
+  .model-switch {
+    display: flex;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f1f5f9;
+    height: 40px;
+    flex: 0 0 auto;
+  }
+  .model-switch .ms-opt {
+    flex: 1;
+    min-width: 42px;
+    border: none;
+    background: transparent;
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+    cursor: pointer;
+    padding: 0 8px;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .model-switch .ms-opt + .ms-opt { border-left: 1px solid var(--border); }
+  .model-switch .ms-opt.active {
+    background: var(--accent);
+    color: #fff;
+  }
+
   .history-range { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
   .history-range input[type="date"] { flex: 1; padding: 7px; font-size: 13px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0; }
   .history-range span { font-size: 12px; color: #667; }
@@ -734,12 +765,16 @@
      подвал поверх), последний ряд уезжал на 2-й лист. Поэтому центрируем
      через простой фиксированный отступ, без попытки занять весь лист. */
   #printArea .print-labels-page {
-    width: 180mm;          /* ровно 2 колонки × 90мм, без зазора между ними */
-    /* Отступ сверху 10мм — НЕ больше: сетка 5×45мм = 225мм, а Safari при
-       печати сам добавляет свои поля и подвал с URL/датой (~30мм суммарно),
-       оставляя под контент ~267мм. При отступе 36мм (36+225=261мм) нижний
-       ряд не помещался и уезжал на второй лист. */
-    margin: 10mm auto 0 auto;
+    /* @page margin:0 (см. @media print) — значит вся страница A4 наша,
+       210×297мм. Сетка 180×225мм центрируется точно: по 15мм по бокам и
+       по 36мм сверху/снизу. Раньше Safari добавляла свои поля и подвал
+       поверх наших отступов, из-за чего нижний ряд уезжал на 2-й лист. */
+    width: 180mm;
+    height: 297mm;
+    margin: 0 auto;
+    padding: 36mm 0 0 0;
+    box-sizing: border-box;
+    background: #fff;
   }
   #printArea .print-labels-page + .print-labels-page {
     page-break-before: always;
@@ -899,8 +934,16 @@
   .head-menu-wrap { display: flex; align-items: center; justify-content: center; }
 
   @media print {
+    /* Голый белый лист: фон body (--bg, серый) при печати просвечивал
+       под этикетками — гасим его и все поля страницы. */
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    @page { size: A4; margin: 0; }
     .page, .modal-overlay { display: none !important; }
-    #printArea { display: block !important; }
+    #printArea { display: block !important; background: #fff !important; }
     /* Плавающие кнопки (☁️ синхронизация, ↑ наверх, ← назад к позиции)
        лежат вне .page, поэтому их нужно прятать отдельно — иначе они
        остаются поверх печатного листа. */

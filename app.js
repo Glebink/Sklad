@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v47";
+const APP_VERSION = "v48";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -312,6 +312,10 @@ function renderSection(section) {
     if (counts[key] === undefined) counts[key] = 0;
     const isChecked = !!checked[key];
     const guest = isGuestMode();
+    // Модель берём со склада по коду — показываем той же серой подписью
+    // в углу, что и на вкладке «Склад».
+    const whInfoForModel = item.code ? warehouseInfoFor(item.code) : null;
+    const modelLabel = (whInfoForModel && whInfoForModel.model) || "";
     const tr = document.createElement("tr");
     tr.dataset.key = key;
     tr.innerHTML = `
@@ -319,6 +323,7 @@ function renderSection(section) {
       <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
       <td class="name">
         ${escapeHtml(item.name)}
+        ${modelLabel ? `<span class="wh-model-badge">${escapeHtml(modelLabel)}</span>` : ""}
         ${guest ? "" : `<button class="ca-del-badge" data-section="${section}" data-index="${i}" title="Удалить строку">🗑</button>`}
       </td>
       <td class="check">
@@ -1022,19 +1027,18 @@ function createPrintLabelRow() {
     suggestBox.style.bottom = "auto";
     suggestBox.style.maxHeight = available + "px";
   }
-  // Пока подсказка открыта — пересчитываем её позицию КАЖДЫЙ кадр. Так она
-  // всегда «прилипает» строго под полем названия этой строки, независимо
-  // от того, сколько ещё длится анимация клавиатуры/прокрутки (раньше
-  // пробовали пересчитать пару раз с задержкой — не всегда успевало).
-  let followRaf = null;
-  function followSuggestBox() {
-    if (!suggestBox.classList.contains("open")) { followRaf = null; return; }
-    positionSuggestBox();
-    followRaf = requestAnimationFrame(followSuggestBox);
-  }
+  // Пересчитываем позицию ОДИН РАЗ при открытии, а не каждый кадр.
+  // Раньше здесь был requestAnimationFrame-цикл, из-за которого список
+  // ехал следом за пальцем при любом скролле («катался»). Теперь позиция
+  // фиксируется жёстко, а при прокрутке список просто закрывается.
   function startFollowing() {
+    // Двойной пересчёт: сразу и на следующем кадре — чтобы поймать
+    // сдвиг раскладки в момент появления клавиатуры.
     positionSuggestBox();
-    if (followRaf === null) followRaf = requestAnimationFrame(followSuggestBox);
+    requestAnimationFrame(positionSuggestBox);
+  }
+  function closeSuggestBox() {
+    suggestBox.classList.remove("open");
   }
   let picked = null;
   function handleInput() {
@@ -1052,6 +1056,11 @@ function createPrintLabelRow() {
   codeInput.addEventListener("input", handleInput);
   nameInput.addEventListener("focus", startFollowing);
   codeInput.addEventListener("focus", startFollowing);
+  // Прокрутка списка строк или страницы — закрываем подсказку, а не тащим
+  // её за собой (иначе она «ездит» по экрану вслед за пальцем).
+  const rowsContainer = document.getElementById("printLabelRows");
+  if (rowsContainer) rowsContainer.addEventListener("scroll", closeSuggestBox, { passive: true });
+  window.addEventListener("scroll", closeSuggestBox, { passive: true });
   // Появление/скрытие клавиатуры меняет высоту видимой области — тогда
   // тоже пересчитываем, чтобы список остался под полем.
   if (window.visualViewport) {
@@ -1305,6 +1314,28 @@ document.getElementById("wh-body-consumables").addEventListener("change", handle
   });
 });
 
+/* ==================== Переключатель модели (3 положения) ====================
+   Общие функции для .model-switch: читаем/ставим значение и подсвечиваем
+   активную кнопку. Используется и в модалке редактирования склада, и в
+   панели добавления. */
+function setModelSwitch(el, value) {
+  const v = value || "";
+  el.dataset.value = v;
+  el.querySelectorAll(".ms-opt").forEach((btn) => {
+    btn.classList.toggle("active", (btn.dataset.model || "") === v);
+  });
+}
+function getModelSwitch(el) { return el.dataset.value || ""; }
+document.querySelectorAll(".model-switch").forEach((el) => {
+  el.addEventListener("click", (e) => {
+    const btn = e.target.closest(".ms-opt");
+    if (!btn) return;
+    e.preventDefault();
+    setModelSwitch(el, btn.dataset.model || "");
+  });
+  setModelSwitch(el, "");
+});
+
 /* --- Редактирование позиции склада (код/название/кол-во) --- */
 let whEditingTarget = null;
 function openWhEdit(section, index) {
@@ -1314,7 +1345,7 @@ function openWhEdit(section, index) {
   document.getElementById("whEditCode").value = item.code;
   document.getElementById("whEditName").value = item.name;
   document.getElementById("whEditQty").value = item.qty || 0;
-  document.getElementById("whEditModel").value = item.model || "";
+  setModelSwitch(document.getElementById("whEditModel"), item.model || "");
   const box = document.getElementById("whEditSuggestBox");
   if (box) { box.classList.remove("open"); box.innerHTML = ""; }
   document.getElementById("whEditOverlay").classList.add("open");
@@ -1337,7 +1368,7 @@ document.getElementById("whEditSave").addEventListener("click", () => {
   const name = document.getElementById("whEditName").value.trim();
   let qty = parseInt(document.getElementById("whEditQty").value, 10);
   if (isNaN(qty) || qty < 0) qty = 0;
-  const model = document.getElementById("whEditModel").value.trim();
+  const model = getModelSwitch(document.getElementById("whEditModel"));
   if (!name) { closeWhEdit(); return; }
   const sectionChanged = newSection !== section;
 
@@ -1389,7 +1420,7 @@ document.getElementById("whAddBtn").addEventListener("click", () => {
   const section = document.getElementById("whNewSection").value;
   const code = document.getElementById("whNewCode").value.trim();
   const name = document.getElementById("whNewName").value.trim();
-  const model = document.getElementById("whNewModel").value.trim();
+  const model = getModelSwitch(document.getElementById("whNewModel"));
   let qty = parseInt(document.getElementById("whNewQty").value, 10);
   if (isNaN(qty) || qty < 0) qty = 0;
   if (!name) return;
@@ -1400,7 +1431,7 @@ document.getElementById("whAddBtn").addEventListener("click", () => {
   saveWarehouse();
   document.getElementById("whNewCode").value = "";
   document.getElementById("whNewName").value = "";
-  document.getElementById("whNewModel").value = "";
+  setModelSwitch(document.getElementById("whNewModel"), "");
   document.getElementById("whNewQty").value = "0";
   const addBox = document.getElementById("whAddSuggestBox");
   if (addBox) { addBox.classList.remove("open"); addBox.innerHTML = ""; }
@@ -1748,7 +1779,7 @@ function buildWarehouseIndex() {
   ["parts", "consumables"].forEach((section) => {
     warehouse[section].forEach((it, index) => {
       codeVariants(it.code).forEach((c) => {
-        if (!map[c]) map[c] = { name: it.name, qty: it.qty || 0, code: it.code, section, index };
+        if (!map[c]) map[c] = { name: it.name, qty: it.qty || 0, code: it.code, model: it.model || "", section, index };
       });
     });
   });
