@@ -553,11 +553,17 @@
   }
   .modal-box .field-label { font-size: 12px; color: #667; text-align: left; margin: 6px 0 2px 0; }
 
-  .modal-box.wide { max-width: 420px; }
+  .modal-box.wide { max-width: 420px; max-height: 88vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .modal-box.wide p { text-align: left; }
 
   /* ==================== Строка формы в модалке печати этикеток ==================== */
-  #printLabelRows { max-height: 50vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  /* Раньше здесь были max-height + overflow-y: скролл-контейнер обрезал
+     выпадающие подсказки, из-за чего их пришлось выносить в body и
+     позиционировать через JS — а они «отставали» от поля при появлении
+     клавиатуры и накрывали строку ввода. Теперь контейнер ничего не
+     обрезает, подсказка живёт прямо под своим полем в обычном потоке,
+     и никакие координаты считать не нужно. */
+  #printLabelRows { }
   .print-label-row {
     position: relative;
     border: 1px solid var(--border);
@@ -595,15 +601,6 @@
   .print-label-row .plr-del:active { background: #cbd5e1; }
   /* Подсказки вынесены в <body> и позиционируются через JS (position:fixed)
      — иначе их обрезает скролл-контейнер #printLabelRows. */
-  .plr-suggest-fixed {
-    position: fixed !important;
-    z-index: 2000;
-    /* left/width/top/max-height задаёт JS (positionSuggestBox) — гасим
-       значения базового .suggest-box, чтобы они не спорили. */
-    right: auto !important;
-    margin-top: 0 !important;
-  }
-
   /* ==================== Переключатель модели (3 положения) ====================
      Слева YGW 4.0 — по центру «—» (без модели) — справа YGW 5.0.
      Заменил поле ввода: значения всего три, набирать руками незачем. */
@@ -774,15 +771,15 @@
      подвал поверх), последний ряд уезжал на 2-й лист. Поэтому центрируем
      через простой фиксированный отступ, без попытки занять весь лист. */
   #printArea .print-labels-page {
-    /* Размеры как в ручном макете: этикетка 90x45мм, сетка 2x5 = 180x225мм.
-       По ширине это влезает: системная печать оставляет ~190мм.
-       КРИТИЧНО: никакой фиксированной height/padding сверху — именно
-       height:297mm + padding:36mm раньше переполняли лист, из-за чего
-       правый столбец обрезался, а нижний ряд уезжал на 2-й лист.
-       Блок просто прижат к левому верхнему углу. */
-    width: 180mm;
+    /* Правый столбец на реальном принтере обрезался: системная печать
+       оставляет под контент меньше 180мм. Поэтому этикетка 87мм
+       (сетка 174мм) и дополнительный сдвиг влево на 4мм — правый край
+       уходит от границы обрезки. Никакой фиксированной height/padding:
+       именно height:297mm + padding сверху раньше выталкивали нижний ряд
+       на второй лист. */
+    width: 174mm;
     max-width: 100%;
-    margin: 0;
+    margin: 0 0 0 -4mm;
     padding: 0;
     background: #fff;
   }
@@ -792,7 +789,7 @@
   }
   #printArea .print-label.v2 {
     position: relative;
-    width: 90mm;
+    width: 87mm;
     height: 45mm;
     border: 1px solid #999;
     box-sizing: border-box;

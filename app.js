@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v57";
+const APP_VERSION = "v58";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -954,7 +954,7 @@ function printLabelsV2(entries) {
   const pages = [];
   for (let i = 0; i < allLabels.length; i += LABELS_V2_PER_PAGE) {
     const slice = allLabels.slice(i, i + LABELS_V2_PER_PAGE).join("");
-    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 90mm);">${slice}</div></div>`);
+    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 87mm);">${slice}</div></div>`);
   }
   document.getElementById("printArea").innerHTML = pages.join("");
   window.print();
@@ -1006,39 +1006,13 @@ function createPrintLabelRow() {
   const codeInput = row.querySelector(".plr-code");
   const modelInput = row.querySelector(".plr-model");
   const suggestBox = row.querySelector(".plr-suggest");
-  // Подсказки выносим в <body> и позиционируем через position:fixed —
-  // иначе их обрезает скролл-контейнер строк (#printLabelRows), даже с
-  // высоким z-index (overflow родителя обрезает потомков всегда).
-  suggestBox.classList.add("plr-suggest-fixed");
-  document.body.appendChild(suggestBox);
-  function positionSuggestBox() {
-    // Позиционируем строго под полем названия ИМЕННО этой строки.
-    // Плюс жёстко ограничиваем высоту оставшимся до низа экрана местом:
-    // иначе при открытой клавиатуре длинный список не помещается и
-    // «переползает» вверх, накрывая само поле ввода (старый баг).
-    const r = nameInput.getBoundingClientRect();
-    const viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
-    const top = r.bottom + 4;
-    const available = Math.max(80, viewportH - top - 8);
-    suggestBox.style.left = r.left + "px";
-    suggestBox.style.width = r.width + "px";
-    suggestBox.style.top = top + "px";
-    suggestBox.style.bottom = "auto";
-    suggestBox.style.maxHeight = available + "px";
-  }
-  // Пересчитываем позицию ОДИН РАЗ при открытии, а не каждый кадр.
-  // Раньше здесь был requestAnimationFrame-цикл, из-за которого список
-  // ехал следом за пальцем при любом скролле («катался»). Теперь позиция
-  // фиксируется жёстко, а при прокрутке список просто закрывается.
-  function startFollowing() {
-    // Двойной пересчёт: сразу и на следующем кадре — чтобы поймать
-    // сдвиг раскладки в момент появления клавиатуры.
-    positionSuggestBox();
-    requestAnimationFrame(positionSuggestBox);
-  }
-  function closeSuggestBox() {
-    suggestBox.classList.remove("open");
-  }
+  // Подсказка остаётся в обычном потоке — прямо внутри своей строки, под
+  // полем названия (position:absolute относительно .plr-name-wrap, см. CSS).
+  // Раньше её выносили в <body> и считали координаты через JS, потому что
+  // её обрезал скролл-контейнер строк; тот контейнер убран, и теперь
+  // никаких координат считать не нужно — подсказка физически привязана к
+  // полю и не может от него отстать или накрыть его при появлении
+  // клавиатуры.
   let picked = null;
   function handleInput() {
     picked = null;
@@ -1049,24 +1023,9 @@ function createPrintLabelRow() {
       modelInput.value = r.model || ""; // модель — как и код, подставляется автоматически из склада
       suggestBox.classList.remove("open");
     });
-    startFollowing();
   }
   nameInput.addEventListener("input", handleInput);
   codeInput.addEventListener("input", handleInput);
-  nameInput.addEventListener("focus", startFollowing);
-  codeInput.addEventListener("focus", startFollowing);
-  // Прокрутка списка строк или страницы — закрываем подсказку, а не тащим
-  // её за собой (иначе она «ездит» по экрану вслед за пальцем).
-  const rowsContainer = document.getElementById("printLabelRows");
-  if (rowsContainer) rowsContainer.addEventListener("scroll", closeSuggestBox, { passive: true });
-  window.addEventListener("scroll", closeSuggestBox, { passive: true });
-  // Появление/скрытие клавиатуры меняет высоту видимой области — тогда
-  // тоже пересчитываем, чтобы список остался под полем.
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", () => {
-      if (suggestBox.classList.contains("open")) positionSuggestBox();
-    });
-  }
   registerSuggestZone(suggestBox, [nameInput, codeInput]);
   row.querySelector(".plr-del").addEventListener("click", () => {
     const rows = document.querySelectorAll(".print-label-row");
@@ -1079,23 +1038,17 @@ function createPrintLabelRow() {
       return;
     }
     if (!confirm("Удалить эту позицию?")) return;
-    suggestBox.remove();
-    row.remove();
+    row.remove();   // подсказка лежит внутри строки и удалится вместе с ней
   });
   return row;
 }
-function removeDetachedPrintSuggestBoxes() {
-  document.querySelectorAll(".plr-suggest-fixed").forEach((el) => el.remove());
-}
 function openPrintLabelModal() {
-  removeDetachedPrintSuggestBoxes();
   const container = document.getElementById("printLabelRows");
   container.innerHTML = "";
   container.appendChild(createPrintLabelRow());
   document.getElementById("printLabelOverlay").classList.add("open");
 }
 function closePrintLabelModal() {
-  removeDetachedPrintSuggestBoxes();
   document.getElementById("printLabelOverlay").classList.remove("open");
 }
 document.getElementById("printLabelBtn").addEventListener("click", openPrintLabelModal);
