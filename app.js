@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v58";
+const APP_VERSION = "v60";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -320,9 +320,10 @@ function renderSection(section) {
     tr.dataset.key = key;
     tr.innerHTML = `
       <td class="num">${i + 1}</td>
-      <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}${modelLabel ? `<span class="wh-model-badge">${escapeHtml(modelLabel)}</span>` : ""}</td>
+      <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
       <td class="name">
         ${escapeHtml(item.name)}
+        ${modelLabel ? `<span class="ca-model-badge">${escapeHtml(modelLabel)}</span>` : ""}
         ${guest ? "" : `<button class="ca-del-badge" data-section="${section}" data-index="${i}" title="Удалить строку">🗑</button>`}
       </td>
       <td class="check">
@@ -732,7 +733,14 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   const name = newItemInput.value.trim();
   if (!name) return;
   const code = (addPicked && addPicked.name === name) ? addPicked.code : "";
-  const dupIndex = sections[section].findIndex((it) => it.name === name);
+  // Уникальность позиции определяет КОД, а не название: одинаково
+  // названные детали под разные модели (например «Подшипник вилки»
+  // с кодами 456JY50-01-0 и 454LB40-01-0) — это разные позиции, и обе
+  // должны добавляться. Совпадением считаем только одинаковый код;
+  // если кода нет ни у новой, ни у существующей — сравниваем по названию.
+  const dupIndex = sections[section].findIndex((it) =>
+    code ? (it.code === code) : (!it.code && it.name === name)
+  );
   if (dupIndex !== -1) {
     alert("Такая позиция уже есть в этом списке.");
     const tbody = document.getElementById("body-" + section);
@@ -806,15 +814,16 @@ document.getElementById("editItemSave").addEventListener("click", () => {
   const sectionChanged = newSection !== section;
   if (!sectionChanged && trimmed === oldItem.name && code === oldItem.code) { closeEditItem(); return; }
 
-  // проверка дублей в разделе назначения
+  // проверка дублей в разделе назначения — по КОДУ (см. пояснение при
+  // добавлении): одинаковые названия под разные модели допустимы.
   const clash = sections[newSection].some((it, i) => {
     if (!sectionChanged && i === index) return false;
-    return it.name === trimmed;
+    return code ? (it.code === code) : (!it.code && it.name === trimmed);
   });
   if (clash) {
     alert(sectionChanged
-      ? `Позиция «${trimmed}» уже есть в разделе «${newSection === "parts" ? "Детали" : "Расходники"}».`
-      : "Позиция с таким названием уже есть в этом списке.");
+      ? `Такая позиция уже есть в разделе «${newSection === "parts" ? "Детали" : "Расходники"}».`
+      : "Такая позиция уже есть в этом списке.");
     return;
   }
 
@@ -954,7 +963,7 @@ function printLabelsV2(entries) {
   const pages = [];
   for (let i = 0; i < allLabels.length; i += LABELS_V2_PER_PAGE) {
     const slice = allLabels.slice(i, i + LABELS_V2_PER_PAGE).join("");
-    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 87mm);">${slice}</div></div>`);
+    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 85mm);">${slice}</div></div>`);
   }
   document.getElementById("printArea").innerHTML = pages.join("");
   window.print();
