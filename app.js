@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v55";
+const APP_VERSION = "v56";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -954,7 +954,7 @@ function printLabelsV2(entries) {
   const pages = [];
   for (let i = 0; i < allLabels.length; i += LABELS_V2_PER_PAGE) {
     const slice = allLabels.slice(i, i + LABELS_V2_PER_PAGE).join("");
-    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 85mm);">${slice}</div></div>`);
+    pages.push(`<div class="print-labels-page"><div class="print-labels-grid" style="grid-template-columns: repeat(2, 90mm);">${slice}</div></div>`);
   }
   document.getElementById("printArea").innerHTML = pages.join("");
   window.print();
