@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v50";
+const APP_VERSION = "v52";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1387,8 +1387,7 @@ document.getElementById("whEditSave").addEventListener("click", () => {
   pushWhHistory();
   const oldItem = warehouse[section][index];
   const oldKey = countKey(section, oldItem);
-  const newItem = { code, name, qty };
-  if (model) newItem.model = model;
+  const newItem = { code, name, qty, model };
   const newKey = countKey(newSection, newItem);
   const wasPicked = selectedWH[section].has(oldKey);
 
@@ -1425,8 +1424,7 @@ document.getElementById("whAddBtn").addEventListener("click", () => {
   if (isNaN(qty) || qty < 0) qty = 0;
   if (!name) return;
   pushWhHistory();
-  const newItem = { code, name, qty };
-  if (model) newItem.model = model;
+  const newItem = { code, name, qty, model };
   warehouse[section].push(newItem);
   saveWarehouse();
   document.getElementById("whNewCode").value = "";
@@ -1848,15 +1846,17 @@ let onec = loadOneC();
    модель остаётся пустой (дефолт «без версии»).
    Выполняется один раз, факт запуска помечаем в localStorage. */
 /* ==================== Автоопределение модели по названию ====================
-   Метки версии в названиях: «wind/ygw 5.0» и «wind/ygw 25» → YGW 5.0,
-   «wind/ygw 4.0» → YGW 4.0. Где метки нет — модель пустая (без версии).
-   Используется и при разовой миграции, и при добавлении новых позиций
+   Метки версии в названиях: «wind/ygw 5.0», «wind/ygw 25» и просто «(25)»
+   в скобках → YGW 5.0; «wind/ygw 4.0» → YGW 4.0. Где метки нет — модель
+   пустая (без версии). Голое «25» вне скобок НЕ считается меткой, иначе
+   ловились бы размеры вроде «Винт M6x25».
+   Используется и при автопростановке, и при добавлении новых позиций
    (в т.ч. при импорте остатков из Excel). */
-const MODEL_MIGRATION_KEY = "potreblenie_model_migration_v2";
-const MODEL_TAG_RE = /[\(\[]?\s*(?:wind|ygw)\s*(25|[45][.,]0)\s*[\)\]]?/i;
+const MODEL_TAG_RE = /[\(\[]\s*25\s*[\)\]]|[\(\[]?\s*(?:wind|ygw)\s*(25|[45][.,]0)\s*[\)\]]?/i;
 function detectModelFromName(name) {
   const m = MODEL_TAG_RE.exec(name || "");
   if (!m) return "";
+  if (!m[1]) return "YGW 5.0";           // сработала ветка «(25)» без слова wind/ygw
   const tag = m[1].replace(",", ".");
   if (tag === "25" || tag === "5.0") return "YGW 5.0";
   if (tag === "4.0") return "YGW 4.0";
@@ -1866,31 +1866,32 @@ function stripModelTag(name) {
   return (name || "").replace(MODEL_TAG_RE, "").replace(/\s{2,}/g, " ").trim().replace(/[\s\-–—]+$/, "");
 }
 function runModelMigrationOnce() {
-  if (localStorage.getItem(MODEL_MIGRATION_KEY)) return;
+  // Проходим при каждом запуске и после получения данных с сервера:
+  // иначе синхронизация привозила старые названия с метками обратно и
+  // затирала результат разовой миграции.
+  // Трогаем только позиции, у которых поле model ещё НИ РАЗУ не задавалось
+  // (undefined) — явно выбранное «без версии» (пустая строка) не перетираем.
   let touched = false;
   ["parts", "consumables"].forEach((section) => {
     warehouse[section].forEach((it) => {
       const model = detectModelFromName(it.name);
-      if (!model) return;
-      if (!it.model) it.model = model;
+      if (model && it.model === undefined) { it.model = model; touched = true; }
+      // Метку из названия на СКЛАДЕ убираем всегда — она живёт в поле model
       const cleaned = stripModelTag(it.name);
-      if (cleaned && cleaned !== it.name) it.name = cleaned;
-      touched = true;
+      if (cleaned && cleaned !== it.name) { it.name = cleaned; touched = true; }
     });
     onec[section].forEach((it) => {
       const model = detectModelFromName(it.name);
-      if (!model || it.model) return;
-      it.model = model;   // в 1С название НЕ чистим
-      touched = true;
+      if (model && it.model === undefined) { it.model = model; touched = true; } // название в 1С не чистим
     });
   });
   if (touched) {
     try { localStorage.setItem(WAREHOUSE_KEY, JSON.stringify(warehouse)); } catch (e) {}
     try { localStorage.setItem(ONEC_KEY, JSON.stringify(onec)); } catch (e) {}
   }
-  localStorage.setItem(MODEL_MIGRATION_KEY, "1");
+  return touched;
 }
-runModelMigrationOnce();
+const migrationTouchedAtStartup = runModelMigrationOnce();
 
 const selectedOC = { parts: new Set(), consumables: new Set() };
 
@@ -2231,8 +2232,7 @@ document.getElementById("ocEditSave").addEventListener("click", () => {
   }
   const model = getModelSwitch(document.getElementById("ocEditModel"));
   pushOcHistory();
-  const updated = { code, name, qty };
-  if (model) updated.model = model;
+  const updated = { code, name, qty, model };
   if (sectionChanged) {
     onec[section].splice(index, 1);
     onec[newSection].push(updated);
@@ -3126,6 +3126,10 @@ function applySyncPayload(payload) {
     sections = entry.sections;
     counts = entry.counts;
     checked = entry.checked;
+    // С сервера могли прийти позиции со старыми названиями (метка версии
+    // ещё в тексте) — сразу прогоняем автопростановку модели, иначе
+    // результат локальной миграции затирался каждым получением данных.
+    runModelMigrationOnce();
     selectedCA.parts.clear();
     selectedCA.consumables.clear();
     selectedWH.parts.clear();
@@ -3443,6 +3447,11 @@ renderWarehouseAll();
 renderOneCAll();
 
 updateDirtyIndicator();
+// Если при запуске автопростановка модели что-то изменила (например, впервые
+// после обновления приложения) — помечаем это как локальную правку, чтобы
+// очищенные названия и проставленные модели ушли на сервер, а не остались
+// только на этом устройстве.
+if (migrationTouchedAtStartup && isPrimaryDevice()) markLocalChange();
 if (isSyncConfigured()) {
   if (!isPrimaryDevice()) {
     // Подчинённое устройство: сервер всегда главнее — просто подтягиваем.
