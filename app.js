@@ -53,7 +53,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v46";
+const APP_VERSION = "v47";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1008,10 +1008,19 @@ function createPrintLabelRow() {
   suggestBox.classList.add("plr-suggest-fixed");
   document.body.appendChild(suggestBox);
   function positionSuggestBox() {
+    // Позиционируем строго под полем названия ИМЕННО этой строки.
+    // Плюс жёстко ограничиваем высоту оставшимся до низа экрана местом:
+    // иначе при открытой клавиатуре длинный список не помещается и
+    // «переползает» вверх, накрывая само поле ввода (старый баг).
     const r = nameInput.getBoundingClientRect();
+    const viewportH = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    const top = r.bottom + 4;
+    const available = Math.max(80, viewportH - top - 8);
     suggestBox.style.left = r.left + "px";
     suggestBox.style.width = r.width + "px";
-    suggestBox.style.top = (r.bottom + 4) + "px";
+    suggestBox.style.top = top + "px";
+    suggestBox.style.bottom = "auto";
+    suggestBox.style.maxHeight = available + "px";
   }
   // Пока подсказка открыта — пересчитываем её позицию КАЖДЫЙ кадр. Так она
   // всегда «прилипает» строго под полем названия этой строки, независимо
@@ -1043,6 +1052,13 @@ function createPrintLabelRow() {
   codeInput.addEventListener("input", handleInput);
   nameInput.addEventListener("focus", startFollowing);
   codeInput.addEventListener("focus", startFollowing);
+  // Появление/скрытие клавиатуры меняет высоту видимой области — тогда
+  // тоже пересчитываем, чтобы список остался под полем.
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", () => {
+      if (suggestBox.classList.contains("open")) positionSuggestBox();
+    });
+  }
   registerSuggestZone(suggestBox, [nameInput, codeInput]);
   row.querySelector(".plr-del").addEventListener("click", () => {
     const rows = document.querySelectorAll(".print-label-row");
