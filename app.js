@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v70";
+const APP_VERSION = "v71";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -2004,6 +2004,51 @@ function updateSortArrows(table, section) {
     arrow.textContent = state.col === col ? (state.dir === "asc" ? "↑" : "↓") : "↕";
   });
 }
+/* Порядок сортировки запоминается между запусками: сама сортировка меняет
+   порядок в массиве и сохраняется ЛОКАЛЬНО (на сервер не уходит, чтобы не
+   дёргать синхронизацию). Но данные с сервера приходят в своём порядке и
+   затирали результат — со стороны это выглядело как «сортировка не
+   срабатывает». Поэтому выбор храним отдельно и переприменяем после
+   каждого получения данных (см. reapplySavedSort). */
+const SORT_STATE_KEY = "potreblenie_sort_state_v1";
+function saveSortState() {
+  try { localStorage.setItem(SORT_STATE_KEY, JSON.stringify(sortState)); } catch (e) {}
+}
+function loadSortState() {
+  try {
+    const raw = localStorage.getItem(SORT_STATE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw);
+    ["ca", "wh", "oc"].forEach((t) => {
+      ["parts", "consumables"].forEach((s) => {
+        if (saved[t] && saved[t][s]) sortState[t][s] = saved[t][s];
+      });
+    });
+  } catch (e) {}
+}
+function applySortToList(table, section) {
+  const state = sortState[table][section];
+  if (!state.col) return false;
+  const list = table === "ca" ? sections[section] : (table === "oc" ? onec[section] : warehouse[section]);
+  if (!list) return false;
+  list.sort((a, b) => {
+    const va = getSortValue(table, section, a, state.col);
+    const vb = getSortValue(table, section, b, state.col);
+    const cmp = (typeof va === "string") ? va.localeCompare(vb, "ru") : (va - vb);
+    return state.dir === "asc" ? cmp : -cmp;
+  });
+  return true;
+}
+// Переприменяет сохранённый порядок ко всем таблицам — вызывается после
+// получения данных с сервера.
+function reapplySavedSort() {
+  ["ca", "wh", "oc"].forEach((t) => {
+    ["parts", "consumables"].forEach((s) => applySortToList(t, s));
+  });
+  ["ca", "wh", "oc"].forEach((t) => {
+    ["parts", "consumables"].forEach((s) => updateSortArrows(t, s));
+  });
+}
 function sortTable(table, section, col) {
   const state = sortState[table][section];
   const dir = state.col === col ? (state.dir === "asc" ? "desc" : "asc") : defaultDirFor(col);
@@ -2012,13 +2057,8 @@ function sortTable(table, section, col) {
   if (table === "oc") pushOcHistory();
   state.col = col;
   state.dir = dir;
-  const list = table === "ca" ? sections[section] : (table === "oc" ? onec[section] : warehouse[section]);
-  list.sort((a, b) => {
-    const va = getSortValue(table, section, a, col);
-    const vb = getSortValue(table, section, b, col);
-    const cmp = (typeof va === "string") ? va.localeCompare(vb, "ru") : (va - vb);
-    return dir === "asc" ? cmp : -cmp;
-  });
+  saveSortState();
+  applySortToList(table, section);
   if (table === "ca") {
     persistCurrentLocalOnly();
     renderSection(section);
@@ -4147,6 +4187,10 @@ function applySyncPayload(payload) {
     // ещё в тексте) — сразу прогоняем автопростановку модели, иначе
     // результат локальной миграции затирался каждым получением данных.
     runModelMigrationOnce();
+    // Сервер присылает данные в своём порядке — возвращаем сохранённый
+    // локально порядок сортировки, иначе он сбрасывался после каждой
+    // синхронизации и выглядело это как «сортировка не срабатывает».
+    reapplySavedSort();
     selectedCA.parts.clear();
     selectedCA.consumables.clear();
     selectedWH.parts.clear();
@@ -4459,6 +4503,8 @@ document.addEventListener("click", (e) => {
 });
 
 /* ==================== Старт ==================== */
+loadSortState();
+reapplySavedSort();
 renderAll();
 renderWarehouseAll();
 renderOneCAll();
