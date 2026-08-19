@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v69";
+const APP_VERSION = "v70";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1692,6 +1692,7 @@ function renderWarehouseSection(section) {
             <button class="wh-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
             <button class="wh-history" data-section="${section}" data-index="${i}" title="История выдачи">🕘</button>
             <button class="wh-print" data-section="${section}" data-index="${i}" title="Печать этикеток">🖨️</button>
+            <button class="wh-transfer" data-section="${section}" data-index="${i}" title="В список на перемещение">🚚</button>
             <button class="wh-del danger" data-section="${section}" data-index="${i}" title="Удалить со склада">✕</button>
           </div>
         </div>
@@ -1734,6 +1735,8 @@ function handleWarehouseClick(e) {
       openHistory(section, warehouse[section][index]);
     } else if (btn.classList.contains("wh-print")) {
       printWarehouseLabels(warehouse[section][index]);
+    } else if (btn.classList.contains("wh-transfer")) {
+      addWarehouseItemToTransfer(section, index);
     }
     return;
   }
@@ -2367,6 +2370,36 @@ document.getElementById("ocImportFileBest").addEventListener("change", async (e)
    Что нужно привезти со второго склада. Пополняется кнопкой «+» из окна
    сравнения; остаток на «Бестужевской» подтягивается заново при открытии,
    чтобы список не устаревал после новой выгрузки. */
+/* Добавление позиции в список на перемещение прямо со «Склада»
+   (кнопка 🚚 в меню строки). Остаток на «Бестужевской» подтягивается
+   автоматически по коду, при отсутствии кода — по названию. */
+function addWarehouseItemToTransfer(section, index) {
+  const it = warehouse[section][index];
+  if (!it) return;
+  if (isInTransfer({ code: it.code, name: it.name })) {
+    alert("Эта позиция уже в списке на перемещение.");
+    return;
+  }
+  const idx = buildBestIndex();
+  let found = null;
+  if (it.code) {
+    for (const v of codeVariants(it.code)) { if (idx.byCode[v]) { found = idx.byCode[v]; break; } }
+  }
+  if (!found) {
+    const n = String(it.name || "").toLowerCase().replace(/\s+/g, " ").trim();
+    found = idx.byName[n] || null;
+  }
+  const other = found ? (found.qty || 0) : 0;
+  // свой остаток берём из 1С (там актуальные цифры выгрузки), иначе — со склада
+  const mineItem = (it.code ? findOcItemByCode(it.code) : null) || findOcItemByName(it.name);
+  const mine = mineItem ? (onec[mineItem.section][mineItem.index].qty || 0) : (it.qty || 0);
+
+  transferList.push({ code: it.code || "", name: it.name, model: it.model || "", mine, other });
+  saveTransferList();
+  alert(!bestStock
+    ? `«${it.name}» добавлена. Данные «Бестужевской» ещё не загружены — остаток появится после загрузки файла.`
+    : `«${it.name}» добавлена в список на перемещение. На Бестужевской: ${other}.`);
+}
 function renderTransferList() {
   const idx = buildBestIndex();
   const summary = document.getElementById("ocTransferSummary");
@@ -2520,10 +2553,29 @@ function runOcCompare() {
     list.innerHTML = "";
     return;
   }
-  summary.textContent = `Найдено позиций: ${out.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
-  list.innerHTML = out.length === 0
+  renderOcCompareList();
+}
+/* Отрисовка списка сравнения с учётом строки поиска. Вынесено отдельно,
+   чтобы при вводе в поиск не пересчитывать всё сравнение заново.
+   ВАЖНО: в data-idx кладём индекс в ИСХОДНОМ массиве ocCompareRows, а не
+   в отфильтрованном — иначе кнопка «+» добавляла бы не ту позицию. */
+function renderOcCompareList() {
+  const list = document.getElementById("ocCompareList");
+  const summary = document.getElementById("ocCompareSummary");
+  const limit = document.getElementById("ocCompareLimit").value;
+  const q = (document.getElementById("ocCompareSearch").value || "").toLowerCase().trim();
+  const shown = ocCompareRows
+    .map((r, i) => ({ r, i }))
+    .filter(({ r }) => !q ||
+      String(r.name || "").toLowerCase().includes(q) ||
+      String(r.code || "").toLowerCase().includes(q));
+
+  summary.textContent = q
+    ? `Показано: ${shown.length} из ${ocCompareRows.length} (порог < ${limit}).`
+    : `Найдено позиций: ${ocCompareRows.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
+  list.innerHTML = shown.length === 0
     ? '<div class="sync-history-empty">Ничего не найдено.</div>'
-    : out.map((r, i) => cmpCardHtml(r, i, isInTransfer(r))).join("");
+    : shown.map(({ r, i }) => cmpCardHtml(r, i, isInTransfer(r))).join("");
   // кнопки «+» — добавляют позицию в список на перемещение
   Array.from(list.querySelectorAll(".cmp-add")).forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -2575,11 +2627,21 @@ function ocCompareAsText() {
   ).join("\n");
 }
 document.getElementById("ocCompareBtn").addEventListener("click", () => {
+  document.getElementById("ocCompareSearch").value = "";
   document.getElementById("ocCompareOverlay").classList.add("open");
   runOcCompare();
 });
 document.getElementById("ocCompareLimit").addEventListener("change", runOcCompare);
 document.getElementById("ocCompareMode").addEventListener("change", runOcCompare);
+// Поиск по уже посчитанному списку — пересчитывать сравнение заново не нужно,
+// только перерисовать с фильтром.
+document.getElementById("ocCompareSearch").addEventListener("input", renderOcCompareList);
+document.getElementById("ocCompareSearchClear").addEventListener("click", () => {
+  const input = document.getElementById("ocCompareSearch");
+  input.value = "";
+  renderOcCompareList();
+  input.focus();
+});
 document.getElementById("ocCompareClose").addEventListener("click", () => {
   document.getElementById("ocCompareOverlay").classList.remove("open");
 });
