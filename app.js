@@ -89,41 +89,8 @@ const ONEC_SEED = {
     { code: "329HL50-01-0", name: "Траверса передней вилки (Wind 25)", qty: 129 },
     { code: "458HL50-01-0", name: "Фиксатор передней вилки (Wind 25)", qty: 85 },
     { code: "434HL50-01-0", name: "Фиксатор рулевой планки (Wind 25)", qty: 38 },
-    { code: "AB.16.02.00.3404", name: "Барабан передний (24)", qty: 0 },
-    { code: "AB.50.0033.12", name: "Боковая подсветка самоката(22г)", qty: 0 },
-    { code: "AB.00.0021.11", name: "Винт (М4Х10)(22)", qty: 0 },
-    { code: "AB.00.0005.77", name: "Винт М6Х16 (22)", qty: 0 },
     { code: "14.01.0304.00", name: "Винт М6Х20", qty: 0 },
-    { code: "AB.50.0028.16", name: "Винт М7Х17", qty: 0 },
     { code: "14.01.0362.00", name: "Водонепроницаемая заглушка для рулевой трубы (23)", qty: 0 },
-    { code: "AB.50.0015.39", name: "Вставная чаша (23)", qty: 0 },
-    { code: "AB.50.0025.21", name: "Втулка-коннектор тормоза(22)", qty: 0 },
-    { code: "AB.16.06.00.0622", name: "Декоративная накладка (Бабыха)(25)", qty: 0, model: "YGW 5.0" },
-    { code: "AB.50.0045.25", name: "Демпфирующая накладка (23)", qty: 0 },
-    { code: "AB.16.02.00.3118", name: "Диагностический жгут", qty: 0 },
-    { code: "AB.00.0021.71", name: "Заглушка зарядного порта", qty: 0 },
-    { code: "AB.00.0013.10", name: "Крепежная скоба для фиксации крышки аккумуляторного блока (2022)", qty: 0 },
-    { code: "AB.50.0028.36", name: "Крепежная скоба для фиксации руля (22)", qty: 0 },
-    { code: "AB.50.0028.61", name: "Крепежный элемент для фиксации руля(Стакан)(22)", qty: 0 },
-    { code: "AB.50.0032.22", name: "Крышка переключателя поворота(22)", qty: 0 },
-    { code: "AB.50.0028.27", name: "Левая задняя усиливающая пластина (23)", qty: 0 },
-    { code: "AB.16.06.01.0011", name: "Левый отражатель (23)", qty: 0 },
-    { code: "AB.16.02.00.3245", name: "Мотор - колесо (23)", qty: 0 },
-    { code: "AB.00.0008.06", name: "Накладка(правый задний бампер)(22)", qty: 0 },
-    { code: "AB.50.0032.28", name: "Направляющая для держателя телефона (22)", qty: 0 },
-    { code: "AB.50.0032.21", name: "Нижняя крышка руля (22)", qty: 0 },
-    { code: "AB.50.0028.56", name: "Переднее крыло (23)", qty: 0 },
-    { code: "AB.50.0029.22", name: "Передний бампер (левый и правый) (23)", qty: 0 },
-    { code: "AB.16.02.00.3531", name: "Передний длинный трос (24)", qty: 0 },
-    { code: "AB.50.0042.34", name: "Передний отражатель (23)", qty: 0 },
-    { code: "AB.50.0044.58", name: "Передняя фара (25)", qty: 0, model: "YGW 5.0" },
-    { code: "AB.50.0025.26", name: "Переходный блок переднего тормоза (22)", qty: 0 },
-    { code: "AB.16.02.00.3593", name: "Приборная панель в сборе нижняя (25)", qty: 0, model: "YGW 5.0" },
-    { code: "AB.00.0006.43", name: "Протектор (элемент защиты) тормозной магистрали (22)", qty: 0 },
-    { code: "AB.50.0032.26", name: "Пружинный ползунок(черный)(22)", qty: 0 },
-    { code: "AB.00.0018.97", name: "Рукоятка руля (левая грипса)(23)", qty: 0 },
-    { code: "AB.50.0032.13", name: "Руль (22)", qty: 0 },
-    { code: "AB.50.0035.42", name: "Центральная подставка двойная (23)", qty: 0 },
     { code: "142ZD40-01-0", name: "Battery Compartment Cover Pad Grip Центральный коврик", qty: 30 },
     { code: "454LB40-01-0", name: "Bearing Подшипник", qty: 117 },
     { code: "162ZD40-01-0", name: "Curved Deck Base Grip Передний коврик", qty: 14 },
@@ -145,52 +112,12 @@ const ONEC_SEED = {
     { code: "174XH40-02-0", name: "Scooter Frame Right Side Cover Правая защита бокового индикатора", qty: 30 },
     { code: "524TZ80-01-0", name: "Барабан задний (Wind 4.0)", qty: 96, model: "YGW 4.0" },
     { code: "14.01.0605.00", name: "Болт вилки (22)", qty: 0 },
-    { code: "AB.00.0005.58", name: "Болт на ось колеса", qty: 0 },
-    { code: "AB.50.0032.20", name: "Верхняя крышка руля (22г)", qty: 0 },
-    { code: "AB.50.0028.11", name: "Винт (ST3.5Х9.5)(22)", qty: 0 },
-    { code: "AB.00.0010.94", name: "Винт (М4Х6)(22)", qty: 0 },
     { code: "14.01.0578.00", name: "Винт (М6Х14)", qty: 0 },
-    { code: "AB.16.02.00.3271", name: "Винт 2.9х9.5", qty: 0 },
-    { code: "AB.00.0007.01", name: "Винт крепления боковой накладки 21-25", qty: 0 },
-    { code: "AB.00.0006.95", name: "Винт М4Х16 (22)", qty: 0 },
-    { code: "AB.00.0007.35", name: "Винт М4Х8", qty: 0 },
-    { code: "AB.50.0028.25", name: "Винт М4х8", qty: 0 },
     { code: "805YX05-02-0", name: "Винт М5х18", qty: 300 },
-    { code: "AB.16.06.00.0383", name: "Винт М5х8", qty: 0 },
-    { code: "AB.00.0013.15", name: "Винт М8Х22", qty: 0 },
-    { code: "AB.00.0006.90", name: "Гайка М7 21-25", qty: 0 },
-    { code: "AB.50.0032.23", name: "Заглушка на винтовые соединения", qty: 0 },
-    { code: "AB.50.0032.72", name: "Задний трос-короткий (23)", qty: 0 },
-    { code: "AB.00.0023.67", name: "Замок деки", qty: 0 },
-    { code: "AB.00.0001.50", name: "Защитная крышка кабеля для аккумуляторного отсека(22г)", qty: 0 },
-    { code: "AB.50.0028.37", name: "Звонок самоката (22)", qty: 0 },
-    { code: "AB.00.0001.45", name: "Кабель для подключения задней фары (22)", qty: 0 },
-    { code: "AB.50.0032.39", name: "Кабель управления (23)", qty: 0 },
-    { code: "AB.16.06.00.0152", name: "Колодка заднего барабанного тормоза (25)", qty: 0, model: "YGW 5.0" },
-    { code: "AB.16.06.00.0151", name: "Колодка переднего барабанного тормоза (25)", qty: 0, model: "YGW 5.0" },
-    { code: "AB.16.02.00.3246", name: "Контролер (23)", qty: 0 },
-    { code: "AB.16.02.00.3490", name: "Кривошип заднего барабанного тормоза 23-25", qty: 0 },
-    { code: "AB.50.0030.42", name: "Кронштейн крепления фары", qty: 0 },
-    { code: "AB.50.0032.27", name: "Кронштейн-держатель телефона (22)", qty: 0 },
     { code: "195XH50-02-0", name: "Крышка кабеля мотор колеса (Wind 5.0)", qty: 440, model: "YGW 5.0" },
-    { code: "AB.16.02.00.3918", name: "Курок газа 22-25", qty: 0 },
-    { code: "AB.16.02.00.3596", name: "Накладка-подножка резинка задняя 23-25", qty: 0 },
-    { code: "AB.00.0008.05", name: "Накладка(левый задний бампер)(22)", qty: 0 },
-    { code: "AB.50.0045.26", name: "Ограничитель кронштейна для мобильного телефона (23)", qty: 0 },
-    { code: "AB.50.0032.71", name: "Передний трос-короткий (23)", qty: 0 },
-    { code: "AB.00.0005.59", name: "Передняя ось колеса (22)", qty: 0 },
-    { code: "AB.00.0001.32", name: "Плоская шайба", qty: 0 },
-    { code: "AB.50.0028.28", name: "Правая задняя усиливающая пластина (23)", qty: 0 },
-    { code: "AB.16.06.01.0010", name: "Правый отражатель (23)", qty: 0 },
-    { code: "AB.16.02.01.0008 RU (РНД)", name: "Противоскользящая накладка на дашборд (23)", qty: 0 },
-    { code: "AB.50.0041.42", name: "Пружина для держателя смартфона(22)", qty: 0 },
     { code: "14.01.0378.00", name: "Пылезащитная крышка (Шайба) (22)", qty: 0 },
     { code: "AB.16.02.00.3903", name: "Рама самоката (25)", qty: 31, model: "YGW 5.0" },
-    { code: "AB.00.0009.46", name: "Ручка для вилки (на коннектор батареи)", qty: 0 },
-    { code: "AB.00.0009.45", name: "Уплотнительное кольцо для коннектора (22)", qty: 0 },
-    { code: "AB.50.0032.30", name: "Уплотнительное кольцо приборной панели (22)", qty: 0 },
-    { code: "14.01.0373.00", name: "Цилиндрический крепежный элемент", qty: 0 },
-    { code: "AB.50.0035.41", name: "Шинка задняя (23)", qty: 0 }
+    { code: "14.01.0373.00", name: "Цилиндрический крепежный элемент", qty: 0 }
   ],
   consumables: [
     { code: "15945947", name: "A-VM вафельное полотно 40см*50см VL-5401", qty: 14 },
@@ -588,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v68";
+const APP_VERSION = "v69";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -2280,6 +2207,13 @@ async function parseXlsxFile(file) {
   return out;
 }
 
+/* Служебная номенклатура 1С с кодами вида «AB.xx.xxxx» — это старые
+   позиции, которые нужны только при ненулевом остатке. Нулевые не
+   импортируем и не показываем в сравнении/перемещении, чтобы не засорять
+   списки. */
+function isJunkZeroItem(code, qty) {
+  return /^AB[\s.]/i.test(String(code || "")) && !(qty > 0);
+}
 function parseExcelRows(raw) {
   const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows = [];
@@ -2454,6 +2388,11 @@ function renderTransferList() {
   });
   saveTransferList();
 
+  // убираем из списка старую AB-номенклатуру, если она обнулилась
+  const before = transferList.length;
+  transferList = transferList.filter((t) => !isJunkZeroItem(t.code, t.mine));
+  if (transferList.length !== before) saveTransferList();
+
   summary.textContent = transferList.length
     ? `Позиций в списке: ${transferList.length}.`
     : "";
@@ -2539,6 +2478,7 @@ function buildBestIndex() {
   const byCode = {}, byName = {};
   if (!bestStock || !bestStock.rows) return { byCode, byName };
   bestStock.rows.forEach((r) => {
+    if (isJunkZeroItem(r.code, r.qty)) return;   // старая AB-номенклатура с нулём
     if (r.code) {
       codeVariants(r.code).forEach((v) => { if (!(v in byCode)) byCode[v] = r; });
     }
@@ -2556,6 +2496,7 @@ function runOcCompare() {
     onec[section].forEach((it) => {
       const mine = it.qty || 0;
       if (mine >= limit) return;
+      if (isJunkZeroItem(it.code, mine)) return;   // старая AB-номенклатура с нулём
       let found = null;
       if (it.code) {
         for (const v of codeVariants(it.code)) { if (idx.byCode[v]) { found = idx.byCode[v]; break; } }
@@ -2691,6 +2632,7 @@ document.getElementById("ocImportRun").addEventListener("click", () => {
   let updated = 0, added = 0;
   const byName = [];
   rows.forEach((r) => {
+    if (isJunkZeroItem(r.code, r.qty)) return;   // старая AB-номенклатура с нулём
     if (!r.code) { byName.push(r); return; }
     const found = findOcItemByCode(r.code);
     if (found) {
