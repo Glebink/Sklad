@@ -680,7 +680,7 @@
     vertical-align: middle; margin-left: 6px;
   }
   #backBtn {
-    position: fixed; left: 14px; top: 14px; z-index: 300;
+    position: fixed; left: 14px; bottom: 14px; z-index: 300;
     width: 46px; height: 46px; border-radius: 50%;
     border: 1px solid var(--border); background: #fff; color: #0f766e;
     font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer;
@@ -690,7 +690,7 @@
   }
   #backBtn.show { display: flex; }
   #topBtn {
-    position: fixed; right: 14px; bottom: 14px; z-index: 300;
+    position: fixed; right: 62px; bottom: 14px; z-index: 300;
     width: 46px; height: 46px; border-radius: 50%;
     border: 1px solid var(--border); background: #fff; color: #0f766e;
     font-size: 22px; font-weight: 700; line-height: 1; cursor: pointer;
@@ -993,6 +993,14 @@
   /* ==================== Выпадающее меню действий («⋮») ====================
      Квадратные эмодзи-кнопки, 2 колонки — как в GitHub, без подписей. */
   .menu-wrap { position: relative; }
+  /* Меню строки: у нижних строк раскрывается вверх (класс drop-up ставит
+     JS), иначе оно уходило под край обрезающего контейнера таблицы. */
+  .menu-panel.drop-up {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 6px;
+  }
   .menu-panel {
     display: none;
     position: absolute;

@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v71";
+const APP_VERSION = "v73";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1692,7 +1692,6 @@ function renderWarehouseSection(section) {
             <button class="wh-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
             <button class="wh-history" data-section="${section}" data-index="${i}" title="История выдачи">🕘</button>
             <button class="wh-print" data-section="${section}" data-index="${i}" title="Печать этикеток">🖨️</button>
-            <button class="wh-transfer" data-section="${section}" data-index="${i}" title="В список на перемещение">🚚</button>
             <button class="wh-del danger" data-section="${section}" data-index="${i}" title="Удалить со склада">✕</button>
           </div>
         </div>
@@ -1708,6 +1707,19 @@ function renderWarehouseAll() {
   renderWarehouseSection("consumables");
 }
 
+/* Меню строки лежит внутри таблицы, а у контейнера таблицы overflow-x:auto —
+   браузер при этом обрезает и по вертикали, поэтому у нижних строк меню
+   уходило под край и было не видно. Если снизу не хватает места —
+   раскрываем меню вверх. */
+function placeRowMenu(panel) {
+  panel.classList.remove("drop-up");
+  const rect = panel.parentElement.getBoundingClientRect();
+  const needed = panel.offsetHeight || 150;
+  const spaceBelow = window.innerHeight - rect.bottom;
+  if (spaceBelow < needed + 20 && rect.top > needed + 20) {
+    panel.classList.add("drop-up");
+  }
+}
 function closeAllWhMenus(except) {
   document.querySelectorAll(".wh-menu-panel.open").forEach((p) => {
     if (p !== except) p.classList.remove("open");
@@ -1724,6 +1736,7 @@ function handleWarehouseClick(e) {
       const willOpen = !panel.classList.contains("open");
       closeAllWhMenus();
       panel.classList.toggle("open", willOpen);
+      if (willOpen) placeRowMenu(panel);
       return;
     }
     closeAllWhMenus();
@@ -1735,8 +1748,6 @@ function handleWarehouseClick(e) {
       openHistory(section, warehouse[section][index]);
     } else if (btn.classList.contains("wh-print")) {
       printWarehouseLabels(warehouse[section][index]);
-    } else if (btn.classList.contains("wh-transfer")) {
-      addWarehouseItemToTransfer(section, index);
     }
     return;
   }
@@ -2410,11 +2421,11 @@ document.getElementById("ocImportFileBest").addEventListener("change", async (e)
    Что нужно привезти со второго склада. Пополняется кнопкой «+» из окна
    сравнения; остаток на «Бестужевской» подтягивается заново при открытии,
    чтобы список не устаревал после новой выгрузки. */
-/* Добавление позиции в список на перемещение прямо со «Склада»
+/* Добавление позиции в список на перемещение из вкладки «1С»
    (кнопка 🚚 в меню строки). Остаток на «Бестужевской» подтягивается
    автоматически по коду, при отсутствии кода — по названию. */
-function addWarehouseItemToTransfer(section, index) {
-  const it = warehouse[section][index];
+function addOcItemToTransfer(section, index) {
+  const it = onec[section][index];
   if (!it) return;
   if (isInTransfer({ code: it.code, name: it.name })) {
     alert("Эта позиция уже в списке на перемещение.");
@@ -2430,9 +2441,7 @@ function addWarehouseItemToTransfer(section, index) {
     found = idx.byName[n] || null;
   }
   const other = found ? (found.qty || 0) : 0;
-  // свой остаток берём из 1С (там актуальные цифры выгрузки), иначе — со склада
-  const mineItem = (it.code ? findOcItemByCode(it.code) : null) || findOcItemByName(it.name);
-  const mine = mineItem ? (onec[mineItem.section][mineItem.index].qty || 0) : (it.qty || 0);
+  const mine = it.qty || 0;   // остаток по 1С — это и есть моя «Ферма»
 
   transferList.push({ code: it.code || "", name: it.name, model: it.model || "", mine, other });
   saveTransferList();
@@ -3154,6 +3163,7 @@ function renderOneCSection(section) {
           <button class="iconbtn oc-menu-btn" data-section="${section}" data-index="${i}" title="Действия">⋮</button>
           <div class="menu-panel oc-menu-panel">
             <button class="oc-edit" data-section="${section}" data-index="${i}" title="Редактировать">✎</button>
+            <button class="oc-transfer" data-section="${section}" data-index="${i}" title="В список на перемещение">🚚</button>
             <button class="oc-del danger" data-section="${section}" data-index="${i}" title="Удалить из 1C">✕</button>
           </div>
         </div>
@@ -3186,6 +3196,7 @@ function handleOneCClick(e) {
       const willOpen = !panel.classList.contains("open");
       closeAllOcMenus();
       panel.classList.toggle("open", willOpen);
+      if (willOpen) placeRowMenu(panel);
       return;
     }
     closeAllOcMenus();
@@ -3195,6 +3206,8 @@ function handleOneCClick(e) {
       openOcEdit(section, index);
     } else if (btn.classList.contains("oc-addwh")) {
       openOcToWh(section, index);
+    } else if (btn.classList.contains("oc-transfer")) {
+      addOcItemToTransfer(section, index);
     }
     return;
   }
