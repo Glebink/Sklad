@@ -588,7 +588,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v63";
+const APP_VERSION = "v65";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -597,6 +597,20 @@ const APP_VERSION = "v63";
 const DATA_BY_DATE_KEY = "potreblenie_data_by_date_v3";
 const LAST_DATE_KEY = "potreblenie_last_date_v1";
 const WAREHOUSE_KEY = "potreblenie_warehouse_v1";
+// Остатки второго склада («Бестужевская») — храним отдельно, в основной
+// список 1С они не подмешиваются. Нужны для будущего сравнения остатков
+// между складами.
+const BEST_STOCK_KEY = "potreblenie_best_stock_v1";
+function loadBestStock() {
+  try {
+    const raw = localStorage.getItem(BEST_STOCK_KEY);
+    return raw ? JSON.parse(raw) : null;   // { savedAt, rows: [{code,name,qty}] }
+  } catch (e) { return null; }
+}
+function saveBestStock(data) {
+  try { localStorage.setItem(BEST_STOCK_KEY, JSON.stringify(data)); } catch (e) {}
+}
+let bestStock = loadBestStock();
 
 const MONTHS_FULL_GEN = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
 
@@ -1518,6 +1532,14 @@ function printManualLabels(entries) {
    копий), с автоподбором по складу (как в панели добавления «Учёта») и
    крестиком удаления. «+» снизу добавляет ещё строку. */
 let printLabelRowSeq = 0;
+/* Нумерация строк в форме печати — только для ориентира на экране,
+   в сам печатный лист не попадает (нумеруется форма, не этикетки). */
+function renumberPrintLabelRows() {
+  document.querySelectorAll("#printLabelRows .print-label-row").forEach((row, i) => {
+    const el = row.querySelector(".plr-num");
+    if (el) el.textContent = String(i + 1);
+  });
+}
 function createPrintLabelRow() {
   const id = "plr" + (++printLabelRowSeq);
   const row = document.createElement("div");
@@ -1548,6 +1570,7 @@ function createPrintLabelRow() {
       </div>
       <div class="plr-side"></div>
     </div>
+    <span class="plr-num"></span>
   `;
   const nameInput = row.querySelector(".plr-name");
   const codeInput = row.querySelector(".plr-code");
@@ -1586,6 +1609,7 @@ function createPrintLabelRow() {
     }
     if (!confirm("Удалить эту позицию?")) return;
     row.remove();   // подсказка лежит внутри строки и удалится вместе с ней
+    renumberPrintLabelRows();
   });
   return row;
 }
@@ -1593,6 +1617,7 @@ function openPrintLabelModal() {
   const container = document.getElementById("printLabelRows");
   container.innerHTML = "";
   container.appendChild(createPrintLabelRow());
+  renumberPrintLabelRows();
   document.getElementById("printLabelOverlay").classList.add("open");
 }
 function closePrintLabelModal() {
@@ -1609,6 +1634,7 @@ document.getElementById("printLabelOverlay").addEventListener("click", (e) => {
 });
 document.getElementById("printLabelAddRow").addEventListener("click", () => {
   document.getElementById("printLabelRows").appendChild(createPrintLabelRow());
+  renumberPrintLabelRows();
 });
 document.getElementById("printLabelGo").addEventListener("click", () => {
   const rows = Array.from(document.querySelectorAll(".print-label-row"));
@@ -2327,6 +2353,18 @@ function findOcItem(code, name) {
 }
 function openOcImport() {
   document.getElementById("ocImportArea").value = "";
+  document.getElementById("ocImportFile").value = "";
+  document.getElementById("ocImportFileBest").value = "";
+  ocImportFileRows = null;
+  document.getElementById("ocImportFileInfo").textContent = "";
+  // Показываем, что уже загружено по второму складу и когда
+  const bestInfo = document.getElementById("ocImportFileBestInfo");
+  if (bestStock && bestStock.rows) {
+    const d = new Date(bestStock.savedAt);
+    bestInfo.textContent = `Загружено ${bestStock.rows.length} позиций (${d.toLocaleDateString()} ${d.toLocaleTimeString().slice(0,5)}).`;
+  } else {
+    bestInfo.textContent = "";
+  }
   document.getElementById("ocImportOverlay").classList.add("open");
 }
 function closeOcImport() {
@@ -2356,6 +2394,146 @@ document.getElementById("ocImportFile").addEventListener("change", async (e) => 
     alert("Не удалось прочитать файл .xlsx: " + err.message +
           "\nМожно вставить строки вручную в поле ниже.");
   }
+});
+
+// Второй склад «Бестужевская»: файл только сохраняется отдельно, в список
+// 1С ничего не подмешивается. Пригодится для сравнения остатков между
+// складами — обрабатываем сразу при выборе файла, кнопка не нужна.
+document.getElementById("ocImportFileBest").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  const info = document.getElementById("ocImportFileBestInfo");
+  if (!file) { info.textContent = ""; return; }
+  info.textContent = "Читаю файл…";
+  try {
+    const rows = await parseXlsxFile(file);
+    bestStock = { savedAt: Date.now(), rows };
+    saveBestStock(bestStock);
+    const withQty = rows.filter((r) => r.qty > 0).length;
+    info.textContent = `Сохранено: ${rows.length} позиций (с остатком — ${withQty}). Список 1С не изменён.`;
+  } catch (err) {
+    info.textContent = "Не удалось прочитать файл: " + err.message;
+    alert("Не удалось прочитать файл .xlsx: " + err.message);
+  }
+});
+
+/* --- Ручная вставка строк Excel (вынесена в отдельное окно) --- */
+document.getElementById("ocPasteBtn").addEventListener("click", () => {
+  document.getElementById("ocPasteOverlay").classList.add("open");
+});
+document.getElementById("ocPasteCancel").addEventListener("click", () => {
+  document.getElementById("ocPasteOverlay").classList.remove("open");
+});
+document.getElementById("ocPasteApply").addEventListener("click", () => {
+  const raw = document.getElementById("ocImportArea").value.trim();
+  if (!raw) { alert("Поле пустое."); return; }
+  const rows = parseExcelRows(raw);
+  if (rows.length === 0) { alert("Не удалось распознать ни одной строки."); return; }
+  ocImportFileRows = rows;               // подставляем как источник для «Импортировать»
+  document.getElementById("ocImportFileInfo").textContent =
+    `Из вставленного текста: ${rows.length} строк. Нажмите «Импортировать».`;
+  document.getElementById("ocPasteOverlay").classList.remove("open");
+});
+
+/* ==================== Сравнение остатков между складами ====================
+   Берём свои позиции 1С с остатком меньше порога и ищем их на втором
+   складе («Бестужевская», загружается отдельным файлом). Сопоставляем по
+   коду, при отсутствии кода — по названию. */
+let ocCompareRows = [];
+function buildBestIndex() {
+  const byCode = {}, byName = {};
+  if (!bestStock || !bestStock.rows) return { byCode, byName };
+  bestStock.rows.forEach((r) => {
+    if (r.code) {
+      codeVariants(r.code).forEach((v) => { if (!(v in byCode)) byCode[v] = r; });
+    }
+    const n = String(r.name || "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (n && !(n in byName)) byName[n] = r;
+  });
+  return { byCode, byName };
+}
+function runOcCompare() {
+  const limit = Math.max(1, parseInt(document.getElementById("ocCompareLimit").value, 10) || 40);
+  const mode = document.getElementById("ocCompareMode").value;
+  const idx = buildBestIndex();
+  const out = [];
+  ["parts", "consumables"].forEach((section) => {
+    onec[section].forEach((it) => {
+      const mine = it.qty || 0;
+      if (mine >= limit) return;
+      let found = null;
+      if (it.code) {
+        for (const v of codeVariants(it.code)) { if (idx.byCode[v]) { found = idx.byCode[v]; break; } }
+      }
+      if (!found) {
+        const n = String(it.name || "").toLowerCase().replace(/\s+/g, " ").trim();
+        found = idx.byName[n] || null;
+      }
+      const other = found ? (found.qty || 0) : 0;
+      if (mode === "more" && !(other > mine)) return;
+      out.push({ code: it.code || "", name: it.name, mine, other, missing: !found });
+    });
+  });
+  out.sort((a, b) => (b.other - b.mine) - (a.other - a.mine));
+  ocCompareRows = out;
+
+  const summary = document.getElementById("ocCompareSummary");
+  const list = document.getElementById("ocCompareList");
+  if (!bestStock || !bestStock.rows) {
+    summary.textContent = "Файл склада «Бестужевская» ещё не загружен — загрузите его в окне импорта.";
+    list.innerHTML = "";
+    return;
+  }
+  summary.textContent = `Найдено позиций: ${out.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
+  list.innerHTML = out.length === 0
+    ? '<div class="sync-history-empty">Ничего не найдено.</div>'
+    : out.map((r) => `<div class="sync-history-entry">
+         <div class="sync-history-body"><b>${escapeHtml(r.name)}</b>${r.code ? ` — <span style="font-family:monospace">${escapeHtml(r.code)}</span>` : ""}
+         <br>у меня: <b>${r.mine}</b> · Бестужевская: <b>${r.other}</b>${r.missing ? " (нет в выгрузке)" : ""}</div>
+       </div>`).join("");
+}
+function ocCompareAsText() {
+  const limit = document.getElementById("ocCompareLimit").value;
+  const head = `Сравнение остатков (порог < ${limit})\nМоё / Бестужевская\n`;
+  return head + ocCompareRows.map((r) =>
+    `${r.code ? r.code + " — " : ""}${r.name}: ${r.mine} / ${r.other}${r.missing ? " (нет в выгрузке)" : ""}`
+  ).join("\n");
+}
+document.getElementById("ocCompareBtn").addEventListener("click", () => {
+  document.getElementById("ocCompareOverlay").classList.add("open");
+  runOcCompare();
+});
+document.getElementById("ocCompareLimit").addEventListener("change", runOcCompare);
+document.getElementById("ocCompareMode").addEventListener("change", runOcCompare);
+document.getElementById("ocCompareClose").addEventListener("click", () => {
+  document.getElementById("ocCompareOverlay").classList.remove("open");
+});
+document.getElementById("ocCompareCopy").addEventListener("click", async () => {
+  const text = ocCompareAsText();
+  try {
+    await navigator.clipboard.writeText(text);
+    alert("Список скопирован.");
+  } catch (e) {
+    const ta = document.getElementById("ocImportArea");
+    ta.value = text; ta.select();
+    alert("Скопируйте текст вручную из поля вставки.");
+  }
+});
+document.getElementById("ocComparePrint").addEventListener("click", () => {
+  const limit = document.getElementById("ocCompareLimit").value;
+  const rows = ocCompareRows.map((r) => `<tr>
+      <td>${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.code || "—")}</td>
+      <td style="text-align:center">${r.mine}</td>
+      <td style="text-align:center">${r.other}${r.missing ? " *" : ""}</td>
+    </tr>`).join("");
+  document.getElementById("printArea").innerHTML = `
+    <h1>Сравнение остатков</h1>
+    <div class="print-date">Порог: меньше ${escapeHtml(String(limit))} · позиций: ${ocCompareRows.length}</div>
+    <table>
+      <thead><tr><th>Наименование</th><th style="width:130px;">Код</th><th style="width:70px;">У меня</th><th style="width:90px;">Бестуж.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  window.print();
 });
 
 document.getElementById("ocImportRun").addEventListener("click", () => {

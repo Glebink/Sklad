@@ -409,17 +409,68 @@
 
 <!-- Модалка копирования/вставки списка склада (для переноса в другой файл) -->
 <!-- Модалка: импорт остатков из Excel в 1С -->
+<!-- Ручная вставка строк из Excel (вынесена из окна импорта) -->
+<div class="modal-overlay" id="ocPasteOverlay">
+  <div class="modal-box wide">
+    <p style="font-weight:700;">Вставить строки Excel</p>
+    <div class="footer-note" style="margin-bottom:6px;">
+      Скопируйте столбцы Код / Наименование / Остаток и вставьте сюда.
+    </div>
+    <textarea id="ocImportArea" style="width:100%; min-height:180px; font-family:monospace; font-size:12px; padding:8px; border:1px solid var(--border); border-radius:8px; box-sizing:border-box;" placeholder="Вставьте строки из Excel"></textarea>
+    <div class="modal-actions" style="margin-top:10px;">
+      <button class="confirm-no" id="ocPasteCancel">Отмена</button>
+      <button class="confirm-yes accent" id="ocPasteApply">Применить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Результат сравнения остатков между складами -->
+<div class="modal-overlay" id="ocCompareOverlay">
+  <div class="modal-box wide">
+    <p style="font-weight:700;">Сравнение остатков</p>
+    <div class="footer-note" style="margin-bottom:8px;">
+      Мои позиции с остатком меньше порога — и сколько их на «Бестужевской».
+    </div>
+    <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:8px;">
+      <div style="width:110px; flex:0 0 auto;">
+        <div class="field-label">Порог (меньше)</div>
+        <input type="number" id="ocCompareLimit" min="1" value="40">
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div class="field-label">Что показывать</div>
+        <select id="ocCompareMode">
+          <option value="more">Только где на Бестужевской больше</option>
+          <option value="all">Все (даже если там 0)</option>
+        </select>
+      </div>
+    </div>
+    <div class="footer-note" id="ocCompareSummary" style="margin-bottom:6px;"></div>
+    <div id="ocCompareList" class="sync-history-list"></div>
+    <div class="modal-actions" style="margin-top:10px;">
+      <button class="confirm-no" id="ocCompareClose">Закрыть</button>
+      <button class="confirm-no" id="ocCompareCopy" style="background:#e2e8f0;">📋 Копировать</button>
+      <button class="confirm-yes accent" id="ocComparePrint">🖨️ Печать</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="ocImportOverlay">
   <div class="modal-box wide">
     <p style="font-weight:700;">Импорт остатков в 1С</p>
     <div class="footer-note" style="margin-bottom:6px;">
-      Выберите файл выгрузки <b>.xlsx</b> из 1С («Остатки и доступность
-      товаров») — столбцы Артикул / Номенклатура / В наличии распознаются
-      сами. Либо вставьте строки вручную в поле ниже.
+      Выгрузка <b>.xlsx</b> из 1С («Остатки и доступность товаров») —
+      столбцы Артикул / Номенклатура / В наличии распознаются сами.
     </div>
-    <input type="file" id="ocImportFile" accept=".xlsx" style="width:100%; margin-bottom:8px; font-size:13px;">
-    <div class="footer-note" id="ocImportFileInfo" style="margin-bottom:6px;"></div>
-    <textarea id="ocImportArea" style="width:100%; min-height:150px; font-family:monospace; font-size:12px; padding:8px; border:1px solid var(--border); border-radius:8px; box-sizing:border-box;" placeholder="Вставьте строки из Excel"></textarea>
+
+    <div class="field-label">Склад «Ферма» — мой (обновит остатки в 1С)</div>
+    <input type="file" id="ocImportFile" accept=".xlsx" style="width:100%; font-size:13px;">
+    <div class="footer-note" id="ocImportFileInfo" style="margin-bottom:10px;"></div>
+
+    <div class="field-label">Склад «Бестужевская» — второй (сохранится отдельно)</div>
+    <input type="file" id="ocImportFileBest" accept=".xlsx" style="width:100%; font-size:13px;">
+    <div class="footer-note" id="ocImportFileBestInfo" style="margin-bottom:6px;"></div>
+    <button class="util" id="ocPasteBtn" style="width:100%; margin-bottom:8px;">📋 Вставить строки Excel</button>
+    <button class="util" id="ocCompareBtn" style="width:100%; margin-bottom:8px;">⚖️ Сравнить остатки</button>
     <div class="footer-note" id="ocImportHint" style="margin-top:6px;">
       Существующие позиции: обновится только остаток (название, код и связь
       с учётом не трогаются). Новые позиции добавятся в 1С.
