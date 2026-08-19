@@ -588,7 +588,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v65";
+const APP_VERSION = "v67";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -611,6 +611,19 @@ function saveBestStock(data) {
   try { localStorage.setItem(BEST_STOCK_KEY, JSON.stringify(data)); } catch (e) {}
 }
 let bestStock = loadBestStock();
+
+// Список на перемещение — что нужно привезти со второго склада.
+const TRANSFER_KEY = "potreblenie_transfer_list_v1";
+function loadTransferList() {
+  try {
+    const raw = localStorage.getItem(TRANSFER_KEY);
+    return raw ? JSON.parse(raw) : [];    // [{code,name,mine,other}]
+  } catch (e) { return []; }
+}
+function saveTransferList() {
+  try { localStorage.setItem(TRANSFER_KEY, JSON.stringify(transferList)); } catch (e) {}
+}
+let transferList = loadTransferList();
 
 const MONTHS_FULL_GEN = ["января","февраля","марта","апреля","мая","июня","июля","августа","сентября","октября","ноября","декабря"];
 
@@ -2416,6 +2429,89 @@ document.getElementById("ocImportFileBest").addEventListener("change", async (e)
   }
 });
 
+/* ==================== Список на перемещение ====================
+   Что нужно привезти со второго склада. Пополняется кнопкой «+» из окна
+   сравнения; остаток на «Бестужевской» подтягивается заново при открытии,
+   чтобы список не устаревал после новой выгрузки. */
+function renderTransferList() {
+  const idx = buildBestIndex();
+  const summary = document.getElementById("ocTransferSummary");
+  const list = document.getElementById("ocTransferList");
+  // освежаем цифры по актуальной выгрузке второго склада
+  transferList.forEach((t) => {
+    let found = null;
+    if (t.code) {
+      for (const v of codeVariants(t.code)) { if (idx.byCode[v]) { found = idx.byCode[v]; break; } }
+    }
+    if (!found) {
+      const n = String(t.name || "").toLowerCase().replace(/\s+/g, " ").trim();
+      found = idx.byName[n] || null;
+    }
+    t.other = found ? (found.qty || 0) : 0;
+    // и свой остаток — из текущего списка 1С
+    const mineItem = (t.code ? findOcItemByCode(t.code) : null) || findOcItemByName(t.name);
+    if (mineItem) t.mine = onec[mineItem.section][mineItem.index].qty || 0;
+  });
+  saveTransferList();
+
+  summary.textContent = transferList.length
+    ? `Позиций в списке: ${transferList.length}.`
+    : "";
+  list.innerHTML = transferList.length === 0
+    ? '<div class="sync-history-empty">Список пуст. Добавьте позиции кнопкой «+» в окне сравнения остатков.</div>'
+    : transferList.map((t, i) => cmpCardHtml(t, i, false, true)).join("");
+  Array.from(list.querySelectorAll(".cmp-add")).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      transferList.splice(parseInt(btn.dataset.idx, 10), 1);
+      saveTransferList();
+      renderTransferList();
+    });
+  });
+}
+function transferAsText() {
+  return "Список на перемещение (с Бестужевской)\n" + transferList.map((t) =>
+    `${t.code ? t.code + " — " : ""}${t.name}: у меня ${t.mine}, там ${t.other}`
+  ).join("\n");
+}
+document.getElementById("ocTransferBtn").addEventListener("click", () => {
+  document.getElementById("ocTransferOverlay").classList.add("open");
+  renderTransferList();
+});
+document.getElementById("ocTransferClose").addEventListener("click", () => {
+  document.getElementById("ocTransferOverlay").classList.remove("open");
+});
+document.getElementById("ocTransferClear").addEventListener("click", () => {
+  if (transferList.length === 0) return;
+  if (!confirm("Очистить весь список на перемещение?")) return;
+  transferList = [];
+  saveTransferList();
+  renderTransferList();
+});
+document.getElementById("ocTransferCopy").addEventListener("click", async () => {
+  if (transferList.length === 0) { alert("Список пуст."); return; }
+  try {
+    await navigator.clipboard.writeText(transferAsText());
+    alert("Список скопирован.");
+  } catch (e) { alert("Не удалось скопировать."); }
+});
+document.getElementById("ocTransferPrint").addEventListener("click", () => {
+  if (transferList.length === 0) { alert("Список пуст."); return; }
+  const rows = transferList.map((t) => `<tr>
+      <td>${escapeHtml(t.name)}</td>
+      <td>${escapeHtml(t.code || "—")}</td>
+      <td style="text-align:center">${t.mine}</td>
+      <td style="text-align:center">${t.other}</td>
+    </tr>`).join("");
+  document.getElementById("printArea").innerHTML = `
+    <h1>Список на перемещение</h1>
+    <div class="print-date">С «Бестужевской» · позиций: ${transferList.length}</div>
+    <table>
+      <thead><tr><th>Наименование</th><th style="width:130px;">Код</th><th style="width:70px;">У меня</th><th style="width:90px;">Бестуж.</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  window.print();
+});
+
 /* --- Ручная вставка строк Excel (вынесена в отдельное окно) --- */
 document.getElementById("ocPasteBtn").addEventListener("click", () => {
   document.getElementById("ocPasteOverlay").classList.add("open");
@@ -2470,7 +2566,7 @@ function runOcCompare() {
       }
       const other = found ? (found.qty || 0) : 0;
       if (mode === "more" && !(other > mine)) return;
-      out.push({ code: it.code || "", name: it.name, mine, other, missing: !found });
+      out.push({ code: it.code || "", name: it.name, model: it.model || "", mine, other, missing: !found });
     });
   });
   out.sort((a, b) => (b.other - b.mine) - (a.other - a.mine));
@@ -2486,10 +2582,49 @@ function runOcCompare() {
   summary.textContent = `Найдено позиций: ${out.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
   list.innerHTML = out.length === 0
     ? '<div class="sync-history-empty">Ничего не найдено.</div>'
-    : out.map((r) => `<div class="sync-history-entry">
-         <div class="sync-history-body"><b>${escapeHtml(r.name)}</b>${r.code ? ` — <span style="font-family:monospace">${escapeHtml(r.code)}</span>` : ""}
-         <br>у меня: <b>${r.mine}</b> · Бестужевская: <b>${r.other}</b>${r.missing ? " (нет в выгрузке)" : ""}</div>
-       </div>`).join("");
+    : out.map((r, i) => cmpCardHtml(r, i, isInTransfer(r))).join("");
+  // кнопки «+» — добавляют позицию в список на перемещение
+  Array.from(list.querySelectorAll(".cmp-add")).forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const r = ocCompareRows[parseInt(btn.dataset.idx, 10)];
+      if (!r || isInTransfer(r)) return;
+      transferList.push({ code: r.code, name: r.name, model: r.model || "", mine: r.mine, other: r.other });
+      saveTransferList();
+      btn.textContent = "✓";
+      btn.classList.add("added");
+    });
+  });
+}
+/* Карточка позиции в сравнении/перемещении:
+     код слева сверху · модель справа сверху
+     название по центру
+     снизу два блока с остатками (Ферма / Бестужевская) и кнопка действия */
+function cmpCardHtml(r, idx, added, removeMode) {
+  return `<div class="cmp-card">
+    <div class="cmp-top">
+      <span class="cmp-code">${r.code ? escapeHtml(r.code) : "—"}</span>
+      <span class="cmp-model">${r.model ? escapeHtml(r.model) : ""}</span>
+    </div>
+    <div class="cmp-name">${escapeHtml(r.name)}</div>
+    <div class="cmp-bottom">
+      <div class="cmp-cell">
+        <div class="cmp-cell-label">Ферма</div>
+        <div class="cmp-cell-val">${r.mine}</div>
+      </div>
+      <div class="cmp-cell">
+        <div class="cmp-cell-label">Бестуж.</div>
+        <div class="cmp-cell-val">${r.other}${r.missing ? " *" : ""}</div>
+      </div>
+      ${removeMode
+        ? `<button class="cmp-add danger" data-idx="${idx}" title="Убрать из списка">✕</button>`
+        : `<button class="cmp-add${added ? " added" : ""}" data-idx="${idx}" title="Добавить в список на перемещение">${added ? "✓" : "+"}</button>`}
+    </div>
+  </div>`;
+}
+function isInTransfer(r) {
+  return transferList.some((t) =>
+    (r.code && t.code === r.code) || (!r.code && !t.code && t.name === r.name)
+  );
 }
 function ocCompareAsText() {
   const limit = document.getElementById("ocCompareLimit").value;

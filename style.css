@@ -539,6 +539,10 @@
     align-items: center; justify-content: center; z-index: 1000;
   }
   .modal-overlay.open { display: flex; }
+  /* Окна, которые открываются ПОВЕРХ другого окна (сравнение и вставка
+     вызываются из окна импорта) — иначе они появлялись под ним, так как
+     z-index у всех модалок одинаковый. */
+  #ocCompareOverlay, #ocPasteOverlay, #ocTransferOverlay { z-index: 1100; }
   .modal-box { background: #fff; border-radius: 12px; padding: 20px; max-width: 340px; width: 90%; text-align: center; }
   .modal-box p { font-size: 15px; margin: 0 0 12px 0; }
   .modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 4px; }
@@ -599,6 +603,19 @@
   }
   .print-label-row .plr-name-wrap input[type="text"] { width: 100%; }
   .print-label-row .plr-side { width: 72px; flex: 0 0 auto; }
+  /* Порядковый номер строки в форме печати — серым в правом нижнем
+     углу, без рамки и подложки. Только ориентир на экране; на печатный
+     лист не попадает (см. @media print — там скрыта вся модалка). */
+  .print-label-row .plr-num {
+    position: absolute;
+    right: 10px;
+    bottom: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    line-height: 1;
+    pointer-events: none;
+  }
   .print-label-row .plr-del {
     position: absolute;
     top: 8px; right: 8px;
@@ -739,6 +756,73 @@
     font-size: 13px; gap: 8px; margin-bottom: 4px;
   }
   .sync-history-head span { color: #475569; font-size: 12px; }
+  /* ==================== Карточка позиции (сравнение / перемещение) ====
+     По наброску: код слева сверху, версия модели справа сверху, название
+     по центру, снизу два блока с остатками и кнопка действия. */
+  .cmp-card {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 12px 12px 12px;
+    text-align: left;
+  }
+  .cmp-card:last-child { border-bottom: none; }
+  .cmp-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .cmp-code {
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: #334155;
+  }
+  .cmp-model {
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+  .cmp-name {
+    text-align: center;
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1.25;
+    margin: 8px 0 10px 0;
+    color: #1f2430;
+  }
+  .cmp-bottom {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .cmp-cell {
+    flex: 1;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 6px;
+    text-align: center;
+    background: #f8fafc;
+  }
+  .cmp-cell-label { font-size: 11px; color: #64748b; line-height: 1.2; }
+  .cmp-cell-val { font-size: 18px; font-weight: 700; color: #1f2430; line-height: 1.2; }
+  .cmp-add {
+    flex: 0 0 auto;
+    align-self: center;
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-size: 20px; font-weight: 700; line-height: 1;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .cmp-add:active { background: #1d4ed8; }
+  .cmp-add.added { background: #16a34a; }
+  .cmp-add.danger { background: #e2e8f0; color: #475569; font-size: 15px; }
+  .cmp-add.danger:active { background: #cbd5e1; }
   .sync-history-body {
     margin: 0; font-family: inherit; white-space: pre-wrap; word-break: break-word;
     font-size: 12px; color: #334155; line-height: 1.5;
