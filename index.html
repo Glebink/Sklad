@@ -424,6 +424,27 @@
   </div>
 </div>
 
+<!-- Список на перемещение (что заказать со второго склада) -->
+<div class="modal-overlay" id="ocTransferOverlay">
+  <div class="modal-box wide">
+    <p style="font-weight:700;">Список на перемещение</p>
+    <div class="footer-note" style="margin-bottom:8px;">
+      Позиции, которые нужно привезти с «Бестужевской». Добавляются кнопкой «+»
+      из окна сравнения. Остаток на втором складе подставляется автоматически.
+    </div>
+    <div class="footer-note" id="ocTransferSummary" style="margin-bottom:6px;"></div>
+    <div id="ocTransferList" class="sync-history-list"></div>
+    <div class="modal-actions" style="margin-top:10px;">
+      <button class="confirm-no" id="ocTransferClose">Закрыть</button>
+      <button class="confirm-no" id="ocTransferCopy" style="background:#e2e8f0;">📋 Копировать</button>
+      <button class="confirm-yes accent" id="ocTransferPrint">🖨️ Печать</button>
+    </div>
+    <div class="modal-actions" style="margin-top:6px;">
+      <button class="confirm-no" id="ocTransferClear" style="background:#fecaca; width:100%;">Очистить список</button>
+    </div>
+  </div>
+</div>
+
 <!-- Результат сравнения остатков между складами -->
 <div class="modal-overlay" id="ocCompareOverlay">
   <div class="modal-box wide">
@@ -471,6 +492,7 @@
     <div class="footer-note" id="ocImportFileBestInfo" style="margin-bottom:6px;"></div>
     <button class="util" id="ocPasteBtn" style="width:100%; margin-bottom:8px;">📋 Вставить строки Excel</button>
     <button class="util" id="ocCompareBtn" style="width:100%; margin-bottom:8px;">⚖️ Сравнить остатки</button>
+    <button class="util" id="ocTransferBtn" style="width:100%; margin-bottom:8px;">🚚 Перемещение</button>
     <div class="footer-note" id="ocImportHint" style="margin-top:6px;">
       Существующие позиции: обновится только остаток (название, код и связь
       с учётом не трогаются). Новые позиции добавятся в 1С.
