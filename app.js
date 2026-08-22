@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v73";
+const APP_VERSION = "v79";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1474,13 +1474,38 @@ function printManualLabels(entries) {
 let printLabelRowSeq = 0;
 /* Нумерация строк в форме печати — только для ориентира на экране,
    в сам печатный лист не попадает (нумеруется форма, не этикетки). */
+/* Черновик формы печати: набранные позиции сохраняются на устройстве,
+   чтобы можно было закрыть окно (или выйти из приложения) и вернуться к
+   тому же списку. Очищается только после самой печати. */
+const PRINT_DRAFT_KEY = "potreblenie_print_draft_v1";
+function savePrintDraft() {
+  const rows = Array.from(document.querySelectorAll("#printLabelRows .print-label-row")).map((r) => ({
+    name: r.querySelector(".plr-name").value,
+    code: r.querySelector(".plr-code").value,
+    qty: r.querySelector(".plr-qty").value,
+    copies: r.querySelector(".plr-copies").value,
+    model: r.querySelector(".plr-model").value
+  }));
+  // пустой черновик не храним
+  const filled = rows.some((r) => r.name || r.code || r.qty || r.copies || r.model);
+  try {
+    if (filled) localStorage.setItem(PRINT_DRAFT_KEY, JSON.stringify(rows));
+    else localStorage.removeItem(PRINT_DRAFT_KEY);
+  } catch (e) {}
+}
+function loadPrintDraft() {
+  try { return JSON.parse(localStorage.getItem(PRINT_DRAFT_KEY) || "[]"); } catch (e) { return []; }
+}
+function clearPrintDraft() {
+  try { localStorage.removeItem(PRINT_DRAFT_KEY); } catch (e) {}
+}
 function renumberPrintLabelRows() {
   document.querySelectorAll("#printLabelRows .print-label-row").forEach((row, i) => {
     const el = row.querySelector(".plr-num");
     if (el) el.textContent = String(i + 1);
   });
 }
-function createPrintLabelRow() {
+function createPrintLabelRow(data) {
   const id = "plr" + (++printLabelRowSeq);
   const row = document.createElement("div");
   row.className = "print-label-row";
@@ -1515,7 +1540,20 @@ function createPrintLabelRow() {
   const nameInput = row.querySelector(".plr-name");
   const codeInput = row.querySelector(".plr-code");
   const modelInput = row.querySelector(".plr-model");
+  const qtyInput = row.querySelector(".plr-qty");
+  const copiesInput = row.querySelector(".plr-copies");
   const suggestBox = row.querySelector(".plr-suggest");
+  if (data) {
+    nameInput.value = data.name || "";
+    codeInput.value = data.code || "";
+    modelInput.value = data.model || "";
+    qtyInput.value = data.qty || "";
+    copiesInput.value = data.copies || "";
+  }
+  // любое изменение — сразу в черновик
+  [nameInput, codeInput, modelInput, qtyInput, copiesInput].forEach((el) => {
+    el.addEventListener("input", savePrintDraft);
+  });
   // Подсказка остаётся в обычном потоке — прямо внутри своей строки, под
   // полем названия (position:absolute относительно .plr-name-wrap, см. CSS).
   // Раньше её выносили в <body> и считали координаты через JS, потому что
@@ -1532,6 +1570,7 @@ function createPrintLabelRow() {
       codeInput.value = r.code || "";
       modelInput.value = r.model || ""; // модель — как и код, подставляется автоматически из склада
       suggestBox.classList.remove("open");
+      savePrintDraft();
     });
   }
   nameInput.addEventListener("input", handleInput);
@@ -1545,18 +1584,22 @@ function createPrintLabelRow() {
       nameInput.value = ""; codeInput.value = ""; modelInput.value = "";
       row.querySelector(".plr-qty").value = "";
       row.querySelector(".plr-copies").value = "";
+      savePrintDraft();
       return;
     }
     if (!confirm("Удалить эту позицию?")) return;
     row.remove();   // подсказка лежит внутри строки и удалится вместе с ней
     renumberPrintLabelRows();
+    savePrintDraft();
   });
   return row;
 }
 function openPrintLabelModal() {
   const container = document.getElementById("printLabelRows");
   container.innerHTML = "";
-  container.appendChild(createPrintLabelRow());
+  const draft = loadPrintDraft();
+  if (draft.length === 0) container.appendChild(createPrintLabelRow());
+  else draft.forEach((d) => container.appendChild(createPrintLabelRow(d)));
   renumberPrintLabelRows();
   document.getElementById("printLabelOverlay").classList.add("open");
 }
@@ -1569,12 +1612,15 @@ document.getElementById("printLabelOverlay").addEventListener("click", (e) => {
   if (e.target.id !== "printLabelOverlay") return;
   // Защита от случайного тапа мимо формы — спрашиваем подтверждение,
   // а не закрываем сразу (иначе введённые позиции терялись без вопросов).
-  if (!confirm("Закрыть окно печати? Введённые позиции не сохранятся.")) return;
+  // Позиции теперь сохраняются в черновик, поэтому закрытие безопасно —
+  // подтверждение оставлено только чтобы не закрывать случайным тапом.
+  if (!confirm("Закрыть окно печати? Набранные позиции сохранятся.")) return;
   closePrintLabelModal();
 });
 document.getElementById("printLabelAddRow").addEventListener("click", () => {
   document.getElementById("printLabelRows").appendChild(createPrintLabelRow());
   renumberPrintLabelRows();
+  savePrintDraft();
 });
 document.getElementById("printLabelGo").addEventListener("click", () => {
   const rows = Array.from(document.querySelectorAll(".print-label-row"));
@@ -1599,6 +1645,7 @@ document.getElementById("printLabelGo").addEventListener("click", () => {
     return;
   }
   closePrintLabelModal();
+  clearPrintDraft();      // напечатали — начинаем со свежего списка
   printManualLabels(entries);
 });
 
@@ -1711,18 +1758,46 @@ function renderWarehouseAll() {
    браузер при этом обрезает и по вертикали, поэтому у нижних строк меню
    уходило под край и было не видно. Если снизу не хватает места —
    раскрываем меню вверх. */
+/* Меню строки лежит внутри таблицы, а контейнер таблицы обрезает всё, что
+   выходит за его край (из-за overflow-x:auto браузер обрезает и по
+   вертикали). Раскрытия «вверх» не хватало: у предпоследних строк меню всё
+   равно упиралось в край. Поэтому переводим панель в режим «поверх
+   страницы» (position: fixed) и сами считаем координаты — обрезать её
+   тогда физически нечем. */
 function placeRowMenu(panel) {
-  panel.classList.remove("drop-up");
-  const rect = panel.parentElement.getBoundingClientRect();
-  const needed = panel.offsetHeight || 150;
-  const spaceBelow = window.innerHeight - rect.bottom;
-  if (spaceBelow < needed + 20 && rect.top > needed + 20) {
-    panel.classList.add("drop-up");
+  const btn = panel.parentElement;
+  const r = btn.getBoundingClientRect();
+  panel.classList.add("floating");
+  panel.style.position = "fixed";
+  panel.style.top = "0px";
+  panel.style.left = "0px";
+  panel.style.bottom = "auto";
+  panel.style.right = "auto";
+  const w = panel.offsetWidth || 150;
+  const h = panel.offsetHeight || 150;
+  const pad = 8;
+  // по горизонтали — прижимаем правый край панели к правому краю кнопки
+  let left = r.right - w;
+  left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+  // по вертикали — под кнопкой, а если не помещается, то над ней
+  let top = r.bottom + 6;
+  if (top + h > window.innerHeight - pad) {
+    const above = r.top - h - 6;
+    top = (above >= pad) ? above : Math.max(pad, window.innerHeight - h - pad);
   }
+  panel.style.left = left + "px";
+  panel.style.top = top + "px";
+}
+/* Возвращаем панель в обычное состояние при закрытии, иначе она осталась бы
+   висеть в углу экрана. */
+function resetRowMenu(panel) {
+  panel.classList.remove("floating", "drop-up");
+  panel.style.position = "";
+  panel.style.top = panel.style.left = panel.style.bottom = panel.style.right = "";
 }
 function closeAllWhMenus(except) {
   document.querySelectorAll(".wh-menu-panel.open").forEach((p) => {
-    if (p !== except) p.classList.remove("open");
+    if (p !== except) { p.classList.remove("open"); resetRowMenu(p); }
   });
 }
 function handleWarehouseClick(e) {
@@ -1736,7 +1811,7 @@ function handleWarehouseClick(e) {
       const willOpen = !panel.classList.contains("open");
       closeAllWhMenus();
       panel.classList.toggle("open", willOpen);
-      if (willOpen) placeRowMenu(panel);
+      if (willOpen) placeRowMenu(panel); else resetRowMenu(panel);
       return;
     }
     closeAllWhMenus();
@@ -2785,6 +2860,67 @@ document.getElementById("ocImportRun").addEventListener("click", () => {
   alert(`Готово: обновлено ${updated}, добавлено ${added}.`);
 });
 
+/* ==================== Резервная копия ====================
+   Выгружает все данные приложения в один файл и восстанавливает из него.
+   Токен GitHub и пароль настроек НЕ выгружаются — файл можно спокойно
+   хранить в почте или облаке. */
+const BACKUP_KEYS = [
+  "potreblenie_data_by_date_v3",
+  "potreblenie_warehouse_v1",
+  "potreblenie_onec_v1",
+  "potreblenie_transfer_list_v1",
+  "potreblenie_best_stock_v1",
+  "potreblenie_sort_state_v1",
+  "potreblenie_sync_history_v1"
+];
+function makeBackup() {
+  const data = {};
+  BACKUP_KEYS.forEach((k) => {
+    const v = localStorage.getItem(k);
+    if (v !== null) data[k] = v;
+  });
+  return { app: "sklad", version: APP_VERSION, savedAt: new Date().toISOString(), data };
+}
+function downloadBackup() {
+  const backup = makeBackup();
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const d = new Date();
+  const stamp = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `sklad-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  const size = (JSON.stringify(backup).length / 1024).toFixed(0);
+  setSyncStatus("ok", `Копия сохранена (${size} КБ)`);
+}
+async function restoreBackup(file) {
+  let backup;
+  try { backup = JSON.parse(await file.text()); }
+  catch (e) { alert("Не удалось прочитать файл: это не резервная копия."); return; }
+  if (!backup || backup.app !== "sklad" || !backup.data) {
+    alert("Это не резервная копия приложения."); return;
+  }
+  const when = backup.savedAt ? new Date(backup.savedAt).toLocaleString() : "неизвестно когда";
+  if (!confirm(`Восстановить данные из копии от ${when}?\n\nВСЕ текущие данные на этом устройстве будут заменены.`)) return;
+  Object.keys(backup.data).forEach((k) => {
+    if (BACKUP_KEYS.indexOf(k) === -1) return;   // чужие ключи не трогаем
+    try { localStorage.setItem(k, backup.data[k]); } catch (e) {}
+  });
+  alert("Данные восстановлены. Приложение перезагрузится.");
+  location.reload();
+}
+document.getElementById("backupSaveBtn").addEventListener("click", downloadBackup);
+document.getElementById("backupLoadBtn").addEventListener("click", () => {
+  document.getElementById("backupFileInput").click();
+});
+document.getElementById("backupFileInput").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (file) restoreBackup(file);
+  e.target.value = "";
+});
+
 /* ==================== Копировать / Вставить список склада (перенос между файлами) ==================== */
 let whTransferMode = null; // { type: 'copy'|'paste', section: 'parts'|'consumables' }
 const whTransferArea = document.getElementById("whTransferArea");
@@ -3182,7 +3318,7 @@ function renderOneCAll() {
 /* --- клики по строкам 1C --- */
 function closeAllOcMenus(except) {
   document.querySelectorAll(".oc-menu-panel.open").forEach((p) => {
-    if (p !== except) p.classList.remove("open");
+    if (p !== except) { p.classList.remove("open"); resetRowMenu(p); }
   });
 }
 function handleOneCClick(e) {
@@ -3196,7 +3332,7 @@ function handleOneCClick(e) {
       const willOpen = !panel.classList.contains("open");
       closeAllOcMenus();
       panel.classList.toggle("open", willOpen);
-      if (willOpen) placeRowMenu(panel);
+      if (willOpen) placeRowMenu(panel); else resetRowMenu(panel);
       return;
     }
     closeAllOcMenus();
@@ -3759,6 +3895,10 @@ function openOcToWh(section, index) {
   document.getElementById("ocToWhCode").value = item.code || "";
   document.getElementById("ocToWhName").value = item.name;
   document.getElementById("ocToWhQty").value = 0;
+  // Модель берём из позиции 1С; если там пусто — пробуем определить по
+  // названию (метка wind/ygw в тексте), чтобы не выбирать руками.
+  setModelSwitch(document.getElementById("ocToWhModel"),
+    item.model || detectModelFromName(item.name) || "");
   document.getElementById("ocToWhOverlay").classList.add("open");
   setTimeout(() => {
     const n = document.getElementById("ocToWhName");
@@ -3785,8 +3925,9 @@ document.getElementById("ocToWhSave").addEventListener("click", () => {
   const code = item.code || "";
   if (code && warehouseInfoFor(code)) { alert("Позиция с таким кодом уже есть на складе."); closeOcToWh(); return; }
 
+  const model = getModelSwitch(document.getElementById("ocToWhModel"));
   pushWhHistory();
-  warehouse[section].push({ code, name, qty });
+  warehouse[section].push({ code, name, qty, model });
   saveWarehouse();
   renderWarehouseAll();
   renderOneCAll();

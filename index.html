@@ -364,8 +364,20 @@
     <input type="text" id="ocToWhCode" readonly style="background:#f1f5f9; font-family:monospace;">
     <div class="field-label">Наименование на складе</div>
     <input type="text" id="ocToWhName">
-    <div class="field-label">Количество на складе</div>
-    <input type="number" id="ocToWhQty" min="0" value="0">
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1; min-width:0;">
+        <div class="field-label">Кол-во на складе</div>
+        <input type="number" id="ocToWhQty" min="0" value="0">
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div class="field-label">Модель</div>
+        <div class="model-switch" id="ocToWhModel" data-value="">
+          <button type="button" class="ms-opt" data-model="YGW 4.0">4.0</button>
+          <button type="button" class="ms-opt" data-model="">—</button>
+          <button type="button" class="ms-opt" data-model="YGW 5.0">5.0</button>
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="confirm-no" id="ocToWhCancel">Отмена</button>
       <button class="confirm-yes" id="ocToWhSave" style="background:#2563eb;">Добавить</button>
@@ -537,6 +549,18 @@
       конфликте автоматически проигрывает и без вопросов подтягивает версию с сервера. Также само периодически
       проверяет сервер, пока открыто.
     </div>
+    <div class="field-label">Резервная копия</div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn" id="backupSaveBtn" style="flex:1;">💾 Сохранить копию</button>
+      <button class="btn" id="backupLoadBtn" style="flex:1;">📂 Восстановить</button>
+    </div>
+    <input type="file" id="backupFileInput" accept=".json" style="display:none;">
+    <div class="sync-help" style="margin-top:4px;">
+      Сохраняет все данные (склад, 1С, учёт за все дни, списки) в один файл.
+      Делайте копию раз в неделю: при потере телефона или очистке данных
+      сайта восстановитесь из неё. Токен и пароль в файл не попадают.
+    </div>
+
     <div class="field-label">Пароль настроек синхронизации</div>
     <button class="btn" id="syncPwBtn" style="width:100%;">Задать / изменить пароль</button>
     <div class="sync-help" style="margin-top:4px;">

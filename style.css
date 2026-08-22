@@ -995,6 +995,12 @@
   .menu-wrap { position: relative; }
   /* Меню строки: у нижних строк раскрывается вверх (класс drop-up ставит
      JS), иначе оно уходило под край обрезающего контейнера таблицы. */
+  /* Меню, вынесенное поверх страницы: координаты ставит JS, чтобы его не
+     обрезал контейнер таблицы (см. placeRowMenu). */
+  .menu-panel.floating {
+    z-index: 1200;
+    margin: 0 !important;
+  }
   .menu-panel.drop-up {
     top: auto;
     bottom: 100%;
