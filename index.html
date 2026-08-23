@@ -326,8 +326,8 @@
     <input type="text" id="whEditName">
     <div class="suggest-box" id="whEditSuggestBox" style="left:20px; right:20px;"></div>
     <div style="display:flex; gap:10px;">
-      <div style="flex:1; min-width:0;">
-        <div class="field-label">Кол-во на складе</div>
+      <div style="flex:0 0 92px;">
+        <div class="field-label">Кол-во</div>
         <input type="number" id="whEditQty" min="0">
       </div>
       <div style="flex:1; min-width:0;">
@@ -390,8 +390,8 @@
     <div class="field-label">Наименование на складе</div>
     <input type="text" id="ocToWhName">
     <div style="display:flex; gap:10px;">
-      <div style="flex:1; min-width:0;">
-        <div class="field-label">Кол-во на складе</div>
+      <div style="flex:0 0 92px;">
+        <div class="field-label">Кол-во</div>
         <input type="number" id="ocToWhQty" min="0" value="0">
       </div>
       <div style="flex:1; min-width:0;">
@@ -425,8 +425,8 @@
     <div class="field-label">Наименование</div>
     <input type="text" id="ocEditName">
     <div style="display:flex; gap:10px;">
-      <div style="flex:1; min-width:0;">
-        <div class="field-label">Количество</div>
+      <div style="flex:0 0 92px;">
+        <div class="field-label">Кол-во</div>
         <input type="number" id="ocEditQty" min="0">
       </div>
       <div style="flex:1; min-width:0;">
@@ -494,7 +494,17 @@
         <div class="field-label">Порог (меньше)</div>
         <input type="number" id="ocCompareLimit" min="1" value="40">
       </div>
-      <div style="flex:0 0 110px;">
+      <div style="flex:0 0 106px;">
+        <div class="field-label">Модель</div>
+        <select id="ocCompareModel">
+          <option value="all">Все</option>
+          <option value="YGW 5.0">YGW 5.0</option>
+          <option value="YGW 4.0">YGW 4.0</option>
+          <option value="9Bot">9Bot</option>
+          <option value="none">Без версии</option>
+        </select>
+      </div>
+      <div style="flex:0 0 106px;">
         <div class="field-label">Раздел</div>
         <select id="ocCompareSection">
           <option value="parts">Детали</option>

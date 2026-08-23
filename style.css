@@ -686,14 +686,15 @@
   }
   .model-switch .ms-opt {
     flex: 1;
-    min-width: 42px;
+    min-width: 0;          /* было 42px — из-за этого «9Bot» не влезал */
     border: none;
     background: transparent;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     color: #64748b;
     cursor: pointer;
-    padding: 0 8px;
+    padding: 0 2px;
+    white-space: nowrap;
     -webkit-appearance: none;
     appearance: none;
   }

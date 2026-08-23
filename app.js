@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v84";
+const APP_VERSION = "v86";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -2014,7 +2014,10 @@ document.getElementById("whEditSave").addEventListener("click", () => {
   selectedWH[section].delete(oldKey);
   if (wasPicked) selectedWH[newSection].add(newKey);
 
+  syncModelByCode(code, model);   // модель едина для склада и 1С
   saveWarehouse();
+  saveOneCLocalOnly();
+  renderOneCAll();
   if (sectionChanged) {
     renderWarehouseAll();
     // подсветим, куда переехала позиция
@@ -2039,6 +2042,10 @@ document.getElementById("whAddBtn").addEventListener("click", () => {
   pushWhHistory();
   const newItem = { code, name, qty, model };
   warehouse[section].push(newItem);
+  if (model && syncModelByCode(code, model)) {   // если такой код есть в 1С — подтянем модель и туда
+    saveOneCLocalOnly();
+    renderOneCAll();
+  }
   saveWarehouse();
   document.getElementById("whNewCode").value = "";
   document.getElementById("whNewName").value = "";
@@ -2694,6 +2701,7 @@ function runOcCompare() {
   const limit = Math.max(1, parseInt(document.getElementById("ocCompareLimit").value, 10) || 40);
   const mode = document.getElementById("ocCompareMode").value;
   const sectionMode = document.getElementById("ocCompareSection").value;
+  const modelMode = document.getElementById("ocCompareModel").value;
   const idx = buildBestIndex();
   const out = [];
   // По умолчанию сравниваем только «Детали»: расходники (химия, спецодежда,
@@ -2703,6 +2711,11 @@ function runOcCompare() {
     onec[section].forEach((it) => {
       const mine = it.qty || 0;
       if (mine >= limit) return;
+      // фильтр по модели: «Без версии» — позиции, у которых модель не задана
+      if (modelMode !== "all") {
+        const m = it.model || "";
+        if (modelMode === "none" ? m !== "" : m !== modelMode) return;
+      }
       let found = null;
       if (it.code) {
         for (const v of codeVariants(it.code)) { if (idx.byCode[v]) { found = idx.byCode[v]; break; } }
@@ -2748,9 +2761,11 @@ function renderOcCompareList() {
 
   const secName = { parts: "Детали", consumables: "Расходники", all: "Все разделы" }[
     document.getElementById("ocCompareSection").value] || "";
+  const mdl = document.getElementById("ocCompareModel").value;
+  const mdlName = mdl === "all" ? "" : " · " + (mdl === "none" ? "без версии" : mdl);
   summary.textContent = q
     ? `Показано: ${shown.length} из ${ocCompareRows.length} (${secName}, порог < ${limit}).`
-    : `${secName} · найдено: ${ocCompareRows.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
+    : `${secName}${mdlName} · найдено: ${ocCompareRows.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
   list.innerHTML = shown.length === 0
     ? '<div class="sync-history-empty">Ничего не найдено.</div>'
     : shown.map(({ r, i }) => cmpCardHtml(r, i, isInTransfer(r))).join("");
@@ -2812,6 +2827,7 @@ document.getElementById("ocCompareBtn").addEventListener("click", () => {
 document.getElementById("ocCompareLimit").addEventListener("change", runOcCompare);
 document.getElementById("ocCompareMode").addEventListener("change", runOcCompare);
 document.getElementById("ocCompareSection").addEventListener("change", runOcCompare);
+document.getElementById("ocCompareModel").addEventListener("change", runOcCompare);
 // Поиск по уже посчитанному списку — пересчитывать сравнение заново не нужно,
 // только перерисовать с фильтром.
 document.getElementById("ocCompareSearch").addEventListener("input", renderOcCompareList);
@@ -3263,6 +3279,26 @@ function oneCMatchesFor(code) {
 }
 
 /* Название со склада для данного кода 1C */
+/* Модель — свойство самой детали, а не списка, поэтому держим её
+   одинаковой на «Складе» и в «1С». Меняешь в одном месте — меняется в
+   обоих; сопоставляем по коду. */
+function syncModelByCode(code, model) {
+  if (!code) return 0;
+  const want = codeVariants(code);
+  let changed = 0;
+  [["warehouse", warehouse], ["onec", onec]].forEach(([, store]) => {
+    ["parts", "consumables"].forEach((section) => {
+      store[section].forEach((it) => {
+        if (!it.code) return;
+        if (!codeVariants(it.code).some((v) => want.includes(v))) return;
+        if ((it.model || "") === (model || "")) return;
+        it.model = model;
+        changed++;
+      });
+    });
+  });
+  return changed;
+}
 function warehouseInfoFor(code) {
   for (const c of codeVariants(code)) {
     if (warehouseIndex[c]) return warehouseIndex[c];
@@ -3649,7 +3685,10 @@ document.getElementById("ocEditSave").addEventListener("click", () => {
   } else {
     onec[section][index] = updated;
   }
+  syncModelByCode(code, model);   // модель едина для склада и 1С
   saveOneC();
+  saveWarehouseLocalOnly();
+  renderWarehouseAll();
   if (sectionChanged) {
     renderOneCAll();
     const tbody = document.getElementById("oc-body-" + newSection);
@@ -4132,6 +4171,12 @@ document.getElementById("ocToWhSave").addEventListener("click", () => {
   const model = getModelSwitch(document.getElementById("ocToWhModel"));
   pushWhHistory();
   warehouse[section].push({ code, name, qty, model });
+  // ту же модель проставляем и позиции в 1С, чтобы не расходились
+  if (model) {
+    item.model = model;
+    syncModelByCode(code, model);
+    saveOneCLocalOnly();
+  }
   saveWarehouse();
   renderWarehouseAll();
   renderOneCAll();
