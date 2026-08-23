@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v79";
+const APP_VERSION = "v82";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -2336,13 +2336,6 @@ async function parseXlsxFile(file) {
   return out;
 }
 
-/* Служебная номенклатура 1С с кодами вида «AB.xx.xxxx» — это старые
-   позиции, которые нужны только при ненулевом остатке. Нулевые не
-   импортируем и не показываем в сравнении/перемещении, чтобы не засорять
-   списки. */
-function isJunkZeroItem(code, qty) {
-  return /^AB[\s.]/i.test(String(code || "")) && !(qty > 0);
-}
 function parseExcelRows(raw) {
   const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   const rows = [];
@@ -2545,11 +2538,6 @@ function renderTransferList() {
   });
   saveTransferList();
 
-  // убираем из списка старую AB-номенклатуру, если она обнулилась
-  const before = transferList.length;
-  transferList = transferList.filter((t) => !isJunkZeroItem(t.code, t.mine));
-  if (transferList.length !== before) saveTransferList();
-
   summary.textContent = transferList.length
     ? `Позиций в списке: ${transferList.length}.`
     : "";
@@ -2635,7 +2623,6 @@ function buildBestIndex() {
   const byCode = {}, byName = {};
   if (!bestStock || !bestStock.rows) return { byCode, byName };
   bestStock.rows.forEach((r) => {
-    if (isJunkZeroItem(r.code, r.qty)) return;   // старая AB-номенклатура с нулём
     if (r.code) {
       codeVariants(r.code).forEach((v) => { if (!(v in byCode)) byCode[v] = r; });
     }
@@ -2647,13 +2634,16 @@ function buildBestIndex() {
 function runOcCompare() {
   const limit = Math.max(1, parseInt(document.getElementById("ocCompareLimit").value, 10) || 40);
   const mode = document.getElementById("ocCompareMode").value;
+  const sectionMode = document.getElementById("ocCompareSection").value;
   const idx = buildBestIndex();
   const out = [];
-  ["parts", "consumables"].forEach((section) => {
+  // По умолчанию сравниваем только «Детали»: расходники (химия, спецодежда,
+  // инструмент) возить между складами обычно незачем.
+  const sectionsToScan = sectionMode === "all" ? ["parts", "consumables"] : [sectionMode];
+  sectionsToScan.forEach((section) => {
     onec[section].forEach((it) => {
       const mine = it.qty || 0;
       if (mine >= limit) return;
-      if (isJunkZeroItem(it.code, mine)) return;   // старая AB-номенклатура с нулём
       let found = null;
       if (it.code) {
         for (const v of codeVariants(it.code)) { if (idx.byCode[v]) { found = idx.byCode[v]; break; } }
@@ -2663,7 +2653,10 @@ function runOcCompare() {
         found = idx.byName[n] || null;
       }
       const other = found ? (found.qty || 0) : 0;
-      if (mode === "more" && !(other > mine)) return;
+      // «Бестужевская > 0» — показываем всё, что там есть в наличии
+      // (раньше условие было «больше, чем у меня», и позиции с небольшим,
+      // но реальным остатком в список не попадали).
+      if (mode === "more" && !(other > 0)) return;
       out.push({ code: it.code || "", name: it.name, model: it.model || "", mine, other, missing: !found });
     });
   });
@@ -2694,9 +2687,11 @@ function renderOcCompareList() {
       String(r.name || "").toLowerCase().includes(q) ||
       String(r.code || "").toLowerCase().includes(q));
 
+  const secName = { parts: "Детали", consumables: "Расходники", all: "Все разделы" }[
+    document.getElementById("ocCompareSection").value] || "";
   summary.textContent = q
-    ? `Показано: ${shown.length} из ${ocCompareRows.length} (порог < ${limit}).`
-    : `Найдено позиций: ${ocCompareRows.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
+    ? `Показано: ${shown.length} из ${ocCompareRows.length} (${secName}, порог < ${limit}).`
+    : `${secName} · найдено: ${ocCompareRows.length} (порог < ${limit}, данные Бестужевской от ${new Date(bestStock.savedAt).toLocaleDateString()}).`;
   list.innerHTML = shown.length === 0
     ? '<div class="sync-history-empty">Ничего не найдено.</div>'
     : shown.map(({ r, i }) => cmpCardHtml(r, i, isInTransfer(r))).join("");
@@ -2757,6 +2752,7 @@ document.getElementById("ocCompareBtn").addEventListener("click", () => {
 });
 document.getElementById("ocCompareLimit").addEventListener("change", runOcCompare);
 document.getElementById("ocCompareMode").addEventListener("change", runOcCompare);
+document.getElementById("ocCompareSection").addEventListener("change", runOcCompare);
 // Поиск по уже посчитанному списку — пересчитывать сравнение заново не нужно,
 // только перерисовать с фильтром.
 document.getElementById("ocCompareSearch").addEventListener("input", renderOcCompareList);
@@ -2765,6 +2761,9 @@ document.getElementById("ocCompareSearchClear").addEventListener("click", () => 
   input.value = "";
   renderOcCompareList();
   input.focus();
+});
+document.getElementById("ocCompareX").addEventListener("click", () => {
+  document.getElementById("ocCompareOverlay").classList.remove("open");
 });
 document.getElementById("ocCompareClose").addEventListener("click", () => {
   document.getElementById("ocCompareOverlay").classList.remove("open");
@@ -2818,7 +2817,6 @@ document.getElementById("ocImportRun").addEventListener("click", () => {
   let updated = 0, added = 0;
   const byName = [];
   rows.forEach((r) => {
-    if (isJunkZeroItem(r.code, r.qty)) return;   // старая AB-номенклатура с нулём
     if (!r.code) { byName.push(r); return; }
     const found = findOcItemByCode(r.code);
     if (found) {
@@ -3269,13 +3267,47 @@ function jumpToWarehouse(code, fromSection, fromIndex) {
 }
 
 
+/* ==================== Фильтр списка 1С ====================
+   Список стал длинным (500+ позиций), поэтому вместо одной простыни —
+   выбор: всё / детали / расходники / по остатку / временные коды AB.
+   Фильтр только для просмотра: данные не меняются, синхронизация не
+   запускается. Выбор запоминается на устройстве. */
+const OC_FILTER_KEY = "potreblenie_oc_filter_v1";
+let ocFilter = loadOcFilter();
+function loadOcFilter() {
+  try {
+    const raw = localStorage.getItem(OC_FILTER_KEY);
+    const f = raw ? JSON.parse(raw) : null;
+    if (f && f.mode) { if (f.showCons === undefined) f.showCons = true; return f; }
+    return { mode: "all", qty: 20, showCons: true };
+  } catch (e) { return { mode: "all", qty: 20, showCons: true }; }
+}
+function saveOcFilter() {
+  try { localStorage.setItem(OC_FILTER_KEY, JSON.stringify(ocFilter)); } catch (e) {}
+}
+function isAbCode(code) { return /^AB[\s.]/i.test(String(code || "")); }
+// Возвращает пары { item, i } — исходный индекс обязателен, иначе кнопки
+// в строках стали бы указывать не на те позиции.
+function ocFilteredPairs(section) {
+  // Тумблер «расходники» имеет смысл только в режиме «Остаток»: там в один
+  // список попадают и детали, и расходка, а везти между складами обычно
+  // нужны только детали. В остальных режимах раздел и так задан выбором.
+  if (section === "consumables" && ocFilter.mode === "stock" && !ocFilter.showCons) return [];
+  const pairs = onec[section].map((item, i) => ({ item, i }));
+  switch (ocFilter.mode) {
+    case "parts":        return section === "parts" ? pairs : [];
+    case "consumables":  return section === "consumables" ? pairs : [];
+    case "stock":        return pairs.filter(({ item }) => (item.qty || 0) < (ocFilter.qty || 0));
+    case "ab":           return pairs.filter(({ item }) => isAbCode(item.code));
+    default:             return pairs;
+  }
+}
 function renderOneCSection(section) {
   const tbody = document.getElementById("oc-body-" + section);
-  const list = onec[section];
   const picked = selectedOC[section];
-  const n = list.length;
+  const pairs = ocFilteredPairs(section);
   // собираем разметку одной строкой — заметно быстрее на длинных списках
-  tbody.innerHTML = list.map((item, i) => {
+  tbody.innerHTML = pairs.map(({ item, i }) => {
     const key = section + "::" + item.code + "::" + item.name;
     const whInfo = warehouseInfoFor(item.code);
     const diff = whInfo ? whInfo.qty - (item.qty || 0) : null;
@@ -3313,7 +3345,82 @@ function renderOneCAll() {
   rebuildCrossIndexes();
   renderOneCSection("parts");
   renderOneCSection("consumables");
+  updateOcFilterUI();
 }
+/* Прячем заголовок и таблицу раздела, если после фильтра он пуст —
+   иначе на экране висели бы пустые «Детали (1C)» / «Расходники (1C)». */
+function updateOcFilterUI() {
+  const view = document.getElementById("viewOneC");
+  if (!view) return;
+  ["parts", "consumables"].forEach((section) => {
+    const tbody = document.getElementById("oc-body-" + section);
+    if (!tbody) return;
+    const empty = tbody.children.length === 0;
+    const table = tbody.closest(".table-scroll");
+    if (table) table.style.display = empty ? "none" : "";
+    // Заголовок раздела — только элемент прямо перед таблицей. Идти назад
+    // «до первого .section-head» нельзя: у «Расходников» заголовок — простой
+    // h2, и поиск добирался до шапки «Деталей», пряча её вместе с кнопкой
+    // фильтра. Саму шапку с фильтром не прячем никогда — иначе из режима,
+    // где раздел пуст, нельзя было бы переключиться обратно.
+    const head = table ? table.previousElementSibling : null;
+    const hasFilter = head && head.querySelector && head.querySelector("#ocFilterBtn");
+    if (head && !hasFilter &&
+        (head.classList.contains("section-head") || head.classList.contains("section-title"))) {
+      head.style.display = empty ? "none" : "";
+    }
+  });
+  // подпись рядом с кнопкой фильтра + поле количества только для «Остаток»
+  const label = document.getElementById("ocFilterLabel");
+  const qtyInput = document.getElementById("ocFilterQty");
+  const names = { all: "Всё", parts: "Детали", consumables: "Расходники", stock: "Остаток", ab: "Временные AB" };
+  const shown = ocFilteredPairs("parts").length + ocFilteredPairs("consumables").length;
+  if (label) label.textContent = `${names[ocFilter.mode] || ""} · ${shown}`;
+  if (qtyInput) {
+    qtyInput.style.display = ocFilter.mode === "stock" ? "" : "none";
+    qtyInput.value = ocFilter.qty;
+  }
+  const consBtn = document.getElementById("ocConsToggle");
+  if (consBtn) {
+    consBtn.style.display = ocFilter.mode === "stock" ? "" : "none";
+    consBtn.classList.toggle("off", !ocFilter.showCons);
+    consBtn.title = ocFilter.showCons ? "Расходники показаны — нажмите, чтобы скрыть"
+                                      : "Расходники скрыты — нажмите, чтобы показать";
+  }
+  // отмечаем выбранный пункт в меню
+  document.querySelectorAll("#ocFilterPanel [data-filter]").forEach((b) => {
+    b.classList.toggle("primary", b.dataset.filter === ocFilter.mode);
+  });
+}
+/* --- кнопка фильтра --- */
+document.getElementById("ocFilterBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("ocFilterPanel").classList.toggle("open");
+});
+document.querySelectorAll("#ocFilterPanel [data-filter]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    ocFilter.mode = btn.dataset.filter;
+    saveOcFilter();
+    document.getElementById("ocFilterPanel").classList.remove("open");
+    renderOneCAll();          // только перерисовка, без синхронизации
+  });
+});
+document.getElementById("ocConsToggle").addEventListener("click", () => {
+  ocFilter.showCons = !ocFilter.showCons;
+  saveOcFilter();
+  renderOneCAll();          // только перерисовка, без синхронизации
+});
+document.getElementById("ocFilterQty").addEventListener("input", (e) => {
+  ocFilter.qty = Math.max(0, parseInt(e.target.value, 10) || 0);
+  saveOcFilter();
+  renderOneCAll();
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".oc-filter-wrap")) {
+    const p = document.getElementById("ocFilterPanel");
+    if (p) p.classList.remove("open");
+  }
+});
 
 /* --- клики по строкам 1C --- */
 function closeAllOcMenus(except) {

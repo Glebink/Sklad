@@ -571,6 +571,46 @@
   }
   .modal-box .field-label { font-size: 12px; color: #667; text-align: left; margin: 6px 0 2px 0; }
 
+  /* Крестик закрытия в углу окна */
+  /* Подпись выбранного фильтра рядом с кнопкой в шапке раздела 1С */
+  /* Тумблер «показывать расходники» (только в режиме «Остаток») */
+  .oc-cons-toggle { position: relative; }
+  .oc-cons-toggle.off { opacity: 0.45; }
+  .oc-cons-toggle.off::after {
+    content: "";
+    position: absolute;
+    left: 4px; right: 4px; top: 50%;
+    height: 2px;
+    background: var(--danger);
+    transform: rotate(-20deg);
+    border-radius: 2px;
+  }
+  .oc-filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    white-space: nowrap;
+    margin-left: 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 96px;
+  }
+  .oc-filter-wrap .menu-panel.list { min-width: 160px; }
+  .modal-x {
+    position: absolute;
+    top: 10px; right: 10px;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    border: none;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }
+  .modal-x:active { background: #cbd5e1; }
   .modal-box.wide { max-width: 420px; max-height: 88vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   .modal-box.wide p { text-align: left; }
 
