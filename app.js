@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v82";
+const APP_VERSION = "v84";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1714,11 +1714,27 @@ function runConsumptionExport() {
 }
 
 /* ==================== ВКЛАДКА СКЛАД: логика ==================== */
+/* ==================== Фильтр склада по модели ====================
+   Всё / YGW 5.0 / YGW 4.0 / 9Bot. Только просмотр: данные не меняются,
+   синхронизация не запускается, выбор запоминается на устройстве. */
+const WH_FILTER_KEY = "potreblenie_wh_filter_v1";
+let whFilterModel = (function () {
+  try { return localStorage.getItem(WH_FILTER_KEY) || "all"; } catch (e) { return "all"; }
+})();
+function saveWhFilter() {
+  try { localStorage.setItem(WH_FILTER_KEY, whFilterModel); } catch (e) {}
+}
+// Пары { item, i } — исходный индекс нужен, иначе кнопки в строках стали бы
+// указывать не на те позиции.
+function whFilteredPairs(section) {
+  const pairs = warehouse[section].map((item, i) => ({ item, i }));
+  if (whFilterModel === "all") return pairs;
+  return pairs.filter(({ item }) => (item.model || "") === whFilterModel);
+}
 function renderWarehouseSection(section) {
   const tbody = document.getElementById("wh-body-" + section);
-  const list = warehouse[section];
   const picked = selectedWH[section];
-  tbody.innerHTML = list.map((item, i) => {
+  tbody.innerHTML = whFilteredPairs(section).map(({ item, i }) => {
     const key = countKey(section, item);
     const ocInfo = oneCInfoFor(item.code);
     return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
@@ -1752,7 +1768,50 @@ function renderWarehouseAll() {
   rebuildCrossIndexes();
   renderWarehouseSection("parts");
   renderWarehouseSection("consumables");
+  updateWhFilterUI();
 }
+function updateWhFilterUI() {
+  const label = document.getElementById("whFilterLabel");
+  if (label) {
+    const shown = whFilteredPairs("parts").length + whFilteredPairs("consumables").length;
+    label.textContent = (whFilterModel === "all" ? "Все" : whFilterModel) + " · " + shown;
+  }
+  document.querySelectorAll("#whFilterPanel [data-model]").forEach((b) => {
+    b.classList.toggle("primary", b.dataset.model === whFilterModel);
+  });
+  // прячем пустой раздел (кроме шапки с кнопкой фильтра)
+  ["parts", "consumables"].forEach((section) => {
+    const tbody = document.getElementById("wh-body-" + section);
+    if (!tbody) return;
+    const empty = tbody.children.length === 0;
+    const table = tbody.closest(".table-scroll");
+    if (table) table.style.display = empty ? "none" : "";
+    const head = table ? table.previousElementSibling : null;
+    const hasFilter = head && head.querySelector && head.querySelector("#whFilterBtn");
+    if (head && !hasFilter &&
+        (head.classList.contains("section-head") || head.classList.contains("section-title"))) {
+      head.style.display = empty ? "none" : "";
+    }
+  });
+}
+document.getElementById("whFilterBtn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("whFilterPanel").classList.toggle("open");
+});
+document.querySelectorAll("#whFilterPanel [data-model]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    whFilterModel = btn.dataset.model;
+    saveWhFilter();
+    document.getElementById("whFilterPanel").classList.remove("open");
+    renderWarehouseAll();      // только перерисовка, без синхронизации
+  });
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".wh-filter-wrap")) {
+    const p = document.getElementById("whFilterPanel");
+    if (p) p.classList.remove("open");
+  }
+});
 
 /* Меню строки лежит внутри таблицы, а у контейнера таблицы overflow-x:auto —
    браузер при этом обрезает и по вертикали, поэтому у нижних строк меню
@@ -2839,7 +2898,41 @@ document.getElementById("ocImportRun").addEventListener("click", () => {
       added++; pending.push({ type: "add", row: r });
     }
   });
-  if (!confirm(`Импорт: обновить остаток у ${updated} поз., добавить новых в 1С — ${added}. Склад не изменится. Продолжить?`)) return;
+  // Позиции, которых в свежей выгрузке нет вообще: 1С не выводит их, когда
+  // остаток нулевой. Раньше они оставались со старым числом — например
+  // «Задний барабан (Wind 5.0)» так и висел с 20 штуками, хотя в 1С уже 0.
+  const zeroed = [];
+  ["parts", "consumables"].forEach((section) => {
+    onec[section].forEach((it, index) => {
+      const key = section + "|" + index;
+      if (claimed.has(key)) return;          // позиция была в файле — уже обновлена
+      if ((it.qty || 0) === 0) return;       // и так ноль, трогать нечего
+      zeroed.push({ section, index, name: it.name, was: it.qty });
+    });
+  });
+
+  // Страховка от неполной выгрузки: если обнулять пришлось бы больше
+  // половины позиций с остатком — почти наверняка отчёт выгружен с
+  // отбором (по группе, складу или товару), а не по всей номенклатуре.
+  // Такой импорт молча обнулил бы почти весь список.
+  const withStock = ["parts", "consumables"]
+    .reduce((n, s) => n + onec[s].filter((it) => (it.qty || 0) > 0).length, 0);
+  const suspicious = withStock > 0 && zeroed.length > withStock / 2;
+  if (suspicious) {
+    const ok = confirm(
+      `⚠️ Похоже, выгрузка неполная.\n\n` +
+      `В файле ${rows.length} строк, а обнулить пришлось бы ${zeroed.length} из ${withStock} позиций с остатком.\n\n` +
+      `Обычно так бывает, когда отчёт выгружен с отбором — по группе, складу или конкретному товару, а не по всей номенклатуре.\n\n` +
+      `Импортировать только остатки из файла, НЕ обнуляя остальные?`
+    );
+    if (!ok) return;
+    zeroed.length = 0;      // обнуление отменяем, обновляем только то, что в файле
+  }
+
+  const zeroMsg = zeroed.length
+    ? `\n\nЕщё ${zeroed.length} поз. есть в списке, но отсутствуют в файле — их остаток будет обнулён.`
+    : "";
+  if (!confirm(`Импорт: обновить остаток у ${updated} поз., добавить новых в 1С — ${added}.${zeroMsg}\n\nСклад не изменится. Продолжить?`)) return;
 
   pushOcHistory();
   pending.forEach((p) => {
@@ -2852,10 +2945,11 @@ document.getElementById("ocImportRun").addEventListener("click", () => {
       onec.parts.push(item);
     }
   });
+  zeroed.forEach((z) => { onec[z.section][z.index].qty = 0; });
   saveOneC();
   renderOneCAll();
   closeOcImport();
-  alert(`Готово: обновлено ${updated}, добавлено ${added}.`);
+  alert(`Готово: обновлено ${updated}, добавлено ${added}` + (zeroed.length ? `, обнулено ${zeroed.length}` : "") + ".");
 });
 
 /* ==================== Резервная копия ====================
@@ -3048,7 +3142,10 @@ let onec = loadOneC();
    Используется и при автопростановке, и при добавлении новых позиций
    (в т.ч. при импорте остатков из Excel). */
 const MODEL_TAG_RE = /[\(\[]\s*25\s*[\)\]]|[\(\[]?\s*(?:wind|ygw)\s*(25|[45][.,]0)\s*[\)\]]?/i;
+const BOT_TAG_RE = /\b9\s*[-]?\s*bot\b|ninebot|найнбот/i;
 function detectModelFromName(name) {
+  // 9Bot определяем отдельно — метка не по шаблону wind/ygw
+  if (BOT_TAG_RE.test(name || "")) return "9Bot";
   const m = MODEL_TAG_RE.exec(name || "");
   if (!m) return "";
   if (!m[1]) return "YGW 5.0";           // сработала ветка «(25)» без слова wind/ygw
