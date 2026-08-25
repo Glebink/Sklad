@@ -48,9 +48,9 @@
     <span id="appVersionBadge" title="Версия файлов (номер кэша)"></span>
   </div>
 
-  <div class="add-panel search-bar" id="whSearchBar" style="display:none;"></div>
-  <div class="add-panel search-bar" id="caSearchBar" style="display:flex;"></div>
-  <div class="add-panel search-bar" id="ocSearchBar" style="display:none;"></div>
+  <div class="add-panel search-bar hide-init" id="whSearchBar"></div>
+  <div class="add-panel search-bar" id="caSearchBar"></div>
+  <div class="add-panel search-bar hide-init" id="ocSearchBar"></div>
 </div>
 
 <!-- ===================== ВКЛАДКА: УЧЁТ ===================== -->
@@ -193,7 +193,7 @@
     </select>
     <input type="text" id="ocNewCode" class="code-input" placeholder="Код">
     <input type="text" id="ocNewName" placeholder="Наименование">
-    <button class="btn plus" id="ocAddBtn" style="width:auto; padding:0 16px;">+ Добавить</button>
+    <button class="btn plus" id="ocAddBtn">+ Добавить</button>
     <button class="util" id="ocImportBtn" title="Импорт остатков из Excel">⬆ Импорт</button>
   </div>
 
@@ -212,7 +212,7 @@
         <button class="util" data-filter="stock">Остаток</button>
       </div>
     </div>
-    <input type="number" id="ocFilterQty" min="0" value="20" title="Показывать позиции с остатком меньше этого числа" style="display:none; width:56px; margin:0 0 0 6px; padding:6px; font-size:13px;">
+    <input type="number" id="ocFilterQty" min="0" value="20" title="Показывать позиции с остатком меньше этого числа" style="display:none;">
     <button class="iconbtn oc-cons-toggle" id="ocConsToggle" style="display:none;" title="Расходники">🧴</button>
     <span class="oc-filter-label" id="ocFilterLabel"></span>
     <div class="spacer"></div>
@@ -267,7 +267,7 @@
 
 <!-- Модалка редактирования позиции в списке потребления (с поиском по складу) -->
 <div class="modal-overlay" id="editItemOverlay">
-  <div class="modal-box" style="position:relative;">
+  <div class="modal-box pos-rel">
     <p>Изменить позицию:</p>
     <div class="field-label">Раздел</div>
     <select id="editItemSection">
@@ -276,7 +276,7 @@
     </select>
     <div class="field-label">Наименование</div>
     <input type="text" id="editItemInput" autocomplete="off">
-    <div class="suggest-box" id="editSuggestBox" style="left:20px; right:20px;"></div>
+    <div class="suggest-box suggest-box-inset" id="editSuggestBox"></div>
     <div class="modal-actions">
       <button class="confirm-no" id="editItemCancel">Отмена</button>
       <button class="confirm-yes accent" id="editItemSave">Сохранить</button>
@@ -287,8 +287,8 @@
 <!-- Модалка: списать / добавить количество по позиции (вкладка «Учёт») -->
 <div class="modal-overlay" id="qtyAdjustOverlay">
   <div class="modal-box">
-    <p id="qtyAdjustTitle" style="font-weight:700;">Списать</p>
-    <div class="sync-status-line" id="qtyAdjustInfo" style="margin-bottom:10px;"></div>
+    <p id="qtyAdjustTitle" class="modal-title">Списать</p>
+    <div class="sync-status-line mb-10" id="qtyAdjustInfo"></div>
     <input type="number" id="qtyAdjustInput" min="1" inputmode="numeric" placeholder="Количество" autocomplete="off">
     <div class="modal-actions">
       <button class="confirm-no" id="qtyAdjustCancel">Отмена</button>
@@ -300,14 +300,14 @@
 <!-- Модалка истории по позиции -->
 <div class="modal-overlay" id="historyOverlay">
   <div class="modal-box wide">
-    <p id="historyTitle" style="font-weight:700;">История: —</p>
+    <p id="historyTitle" class="modal-title">История: —</p>
     <div class="history-range">
       <input type="date" id="historyFrom">
       <span>—</span>
       <input type="date" id="historyTo">
     </div>
     <div class="history-list" id="historyList"></div>
-    <div class="modal-actions" style="margin-top:12px;">
+    <div class="modal-actions mt-12">
       <button class="confirm-no" id="historyClose">Закрыть</button>
     </div>
   </div>
@@ -326,13 +326,13 @@
     <input type="text" id="whEditCode">
     <div class="field-label">Наименование</div>
     <input type="text" id="whEditName">
-    <div class="suggest-box" id="whEditSuggestBox" style="left:20px; right:20px;"></div>
-    <div style="display:flex; gap:10px;">
-      <div style="flex:0 0 92px;">
+    <div class="suggest-box suggest-box-inset" id="whEditSuggestBox"></div>
+    <div class="flex-row">
+      <div class="field-narrow">
         <div class="field-label">Кол-во</div>
         <input type="number" id="whEditQty" min="0">
       </div>
-      <div style="flex:1; min-width:0;">
+      <div class="flex-1-0">
         <div class="field-label">Модель</div>
         <div class="model-switch" id="whEditModel" data-value="">
           <button type="button" class="ms-opt" data-model="YGW 4.0">4.0</button>
@@ -354,8 +354,8 @@
   <div class="modal-box wide">
     <p>Печать</p>
     <div id="printLabelRows"></div>
-    <button class="util" id="printLabelAddRow" style="width:100%; font-size:22px; font-weight:700; margin-top:6px;" title="Добавить ещё позицию">+</button>
-    <div class="sync-help" style="margin-top:8px;">
+    <button class="util" id="printLabelAddRow" title="Добавить ещё позицию">+</button>
+    <div class="sync-help mt-8">
       «Шт» печатается в углу этикетки (необязательно). «Кол-во копий» —
       сколько этикеток этой позиции разместить на листе (пусто = 1).
       Лист вмещает 10 этикеток, дальше — новый лист.
@@ -371,12 +371,12 @@
 <div class="modal-overlay" id="ocExportOverlay">
   <div class="modal-box">
     <p>Что выгрузить в PDF?</p>
-    <div class="modal-actions" style="flex-direction:column; gap:8px;">
+    <div class="modal-actions stack">
       <button class="confirm-yes accent full-w" id="ocExportAll">Все позиции</button>
-      <button class="confirm-yes" id="ocExportDiff" style="background:#0f766e; width:100%;">Только расхождения (+ / −)</button>
-      <button class="confirm-yes" id="ocExportPlus" style="background:#16a34a; width:100%;">Только + (излишки)</button>
-      <button class="confirm-yes" id="ocExportMinus" style="background:#c62828; width:100%;">Только − (недостачи)</button>
-      <button class="confirm-no" id="ocExportCancel" style="width:100%;">Отмена</button>
+      <button class="confirm-yes full-w" id="ocExportDiff">Только расхождения (+ / −)</button>
+      <button class="confirm-yes full-w" id="ocExportPlus">Только + (излишки)</button>
+      <button class="confirm-yes full-w" id="ocExportMinus">Только − (недостачи)</button>
+      <button class="confirm-no full-w" id="ocExportCancel">Отмена</button>
     </div>
   </div>
 </div>
@@ -386,17 +386,17 @@
   <div class="modal-box">
     <p>Добавить на склад:</p>
     <div class="field-label">Раздел</div>
-    <input type="text" id="ocToWhSection" readonly style="background:#f1f5f9;">
+    <input type="text" id="ocToWhSection" readonly class="readonly-field">
     <div class="field-label">Код (из 1C, менять нельзя — по нему создаётся связь)</div>
-    <input type="text" id="ocToWhCode" readonly style="background:#f1f5f9; font-family:monospace;">
+    <input type="text" id="ocToWhCode" readonly class="readonly-field mono-field">
     <div class="field-label">Наименование на складе</div>
     <input type="text" id="ocToWhName">
-    <div style="display:flex; gap:10px;">
-      <div style="flex:0 0 92px;">
+    <div class="flex-row">
+      <div class="field-narrow">
         <div class="field-label">Кол-во</div>
         <input type="number" id="ocToWhQty" min="0" value="0">
       </div>
-      <div style="flex:1; min-width:0;">
+      <div class="flex-1-0">
         <div class="field-label">Модель</div>
         <div class="model-switch" id="ocToWhModel" data-value="">
           <button type="button" class="ms-opt" data-model="YGW 4.0">4.0</button>
@@ -408,7 +408,7 @@
     </div>
     <div class="modal-actions">
       <button class="confirm-no" id="ocToWhCancel">Отмена</button>
-      <button class="confirm-yes" id="ocToWhSave" style="background:#2563eb;">Добавить</button>
+      <button class="confirm-yes accent" id="ocToWhSave">Добавить</button>
     </div>
   </div>
 </div>
@@ -426,12 +426,12 @@
     <input type="text" id="ocEditCode">
     <div class="field-label">Наименование</div>
     <input type="text" id="ocEditName">
-    <div style="display:flex; gap:10px;">
-      <div style="flex:0 0 92px;">
+    <div class="flex-row">
+      <div class="field-narrow">
         <div class="field-label">Кол-во</div>
         <input type="number" id="ocEditQty" min="0">
       </div>
-      <div style="flex:1; min-width:0;">
+      <div class="flex-1-0">
         <div class="field-label">Модель</div>
         <div class="model-switch" id="ocEditModel" data-value="">
           <button type="button" class="ms-opt" data-model="YGW 4.0">4.0</button>
@@ -453,12 +453,12 @@
 <!-- Ручная вставка строк из Excel (вынесена из окна импорта) -->
 <div class="modal-overlay" id="ocPasteOverlay">
   <div class="modal-box wide">
-    <p style="font-weight:700;">Вставить строки Excel</p>
-    <div class="footer-note" style="margin-bottom:6px;">
+    <p class="modal-title">Вставить строки Excel</p>
+    <div class="footer-note mb-6">
       Скопируйте столбцы Код / Наименование / Остаток и вставьте сюда.
     </div>
-    <textarea id="ocImportArea" style="width:100%; min-height:180px; font-family:monospace; font-size:12px; padding:8px; border:1px solid var(--border); border-radius:8px; box-sizing:border-box;" placeholder="Вставьте строки из Excel"></textarea>
-    <div class="modal-actions" style="margin-top:10px;">
+    <textarea id="ocImportArea" class="paste-textarea tall" placeholder="Вставьте строки из Excel"></textarea>
+    <div class="modal-actions mt-10">
       <button class="confirm-no" id="ocPasteCancel">Отмена</button>
       <button class="confirm-yes accent" id="ocPasteApply">Применить</button>
     </div>
@@ -468,35 +468,35 @@
 <!-- Список на перемещение (что заказать со второго склада) -->
 <div class="modal-overlay" id="ocTransferOverlay">
   <div class="modal-box wide">
-    <p style="font-weight:700;">Список на перемещение</p>
-    <div class="footer-note" style="margin-bottom:8px;">
+    <p class="modal-title">Список на перемещение</p>
+    <div class="footer-note mb-8">
       Позиции, которые нужно привезти с «Бестужевской». Добавляются кнопкой «+»
       из окна сравнения. Остаток на втором складе подставляется автоматически.
     </div>
-    <div class="footer-note" id="ocTransferSummary" style="margin-bottom:6px;"></div>
+    <div class="footer-note mb-6" id="ocTransferSummary"></div>
     <div id="ocTransferList" class="sync-history-list"></div>
-    <div class="modal-actions" style="margin-top:10px;">
+    <div class="modal-actions mt-10">
       <button class="confirm-no" id="ocTransferClose">Закрыть</button>
-      <button class="confirm-no" id="ocTransferCopy" style="background:#e2e8f0;">📋 Копировать</button>
+      <button class="confirm-no bg-neutral" id="ocTransferCopy">📋 Копировать</button>
       <button class="confirm-yes accent" id="ocTransferPrint">🖨️ Печать</button>
     </div>
-    <div class="modal-actions" style="margin-top:6px;">
-      <button class="confirm-no" id="ocTransferClear" style="background:#fecaca; width:100%;">Очистить список</button>
+    <div class="modal-actions mt-6">
+      <button class="confirm-no bg-danger-soft full-w" id="ocTransferClear">Очистить список</button>
     </div>
   </div>
 </div>
 
 <!-- Результат сравнения остатков между складами -->
 <div class="modal-overlay" id="ocCompareOverlay">
-  <div class="modal-box wide" style="position:relative;">
+  <div class="modal-box wide pos-rel">
     <button class="modal-x" id="ocCompareX" title="Закрыть">✕</button>
-    <p style="font-weight:700;">Сравнение остатков</p>
-    <div style="display:flex; gap:10px; align-items:flex-end; margin-bottom:8px;">
-      <div style="width:110px; flex:0 0 auto;">
+    <p class="modal-title">Сравнение остатков</p>
+    <div class="cmp-filter-row">
+      <div class="field-w110">
         <div class="field-label">Порог (меньше)</div>
         <input type="number" id="ocCompareLimit" min="1" value="40">
       </div>
-      <div style="flex:0 0 106px;">
+      <div class="field-w106">
         <div class="field-label">Модель</div>
         <select id="ocCompareModel">
           <option value="all">Все</option>
@@ -506,7 +506,7 @@
           <option value="none">Без версии</option>
         </select>
       </div>
-      <div style="flex:0 0 106px;">
+      <div class="field-w106">
         <div class="field-label">Раздел</div>
         <select id="ocCompareSection">
           <option value="parts">Детали</option>
@@ -514,7 +514,7 @@
           <option value="all">Все</option>
         </select>
       </div>
-      <div style="flex:1; min-width:0;">
+      <div class="flex-1-0">
         <div class="field-label">Что показывать</div>
         <select id="ocCompareMode">
           <option value="more">Бестужевская &gt; 0</option>
@@ -522,15 +522,15 @@
         </select>
       </div>
     </div>
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-      <input type="text" id="ocCompareSearch" placeholder="Поиск по названию или коду" autocomplete="off" style="flex:1; min-width:0;">
+    <div class="cmp-search-row">
+      <input type="text" id="ocCompareSearch" placeholder="Поиск по названию или коду" autocomplete="off" class="flex-1-0">
       <button class="iconbtn" id="ocCompareSearchClear" title="Очистить">×</button>
     </div>
-    <div class="footer-note" id="ocCompareSummary" style="margin-bottom:6px;"></div>
+    <div class="footer-note mb-6" id="ocCompareSummary"></div>
     <div id="ocCompareList" class="sync-history-list"></div>
-    <div class="modal-actions" style="margin-top:10px;">
+    <div class="modal-actions mt-10">
       <button class="confirm-no" id="ocCompareClose">Закрыть</button>
-      <button class="confirm-no" id="ocCompareCopy" style="background:#e2e8f0;">📋 Копировать</button>
+      <button class="confirm-no bg-neutral" id="ocCompareCopy">📋 Копировать</button>
       <button class="confirm-yes accent" id="ocComparePrint">🖨️ Печать</button>
     </div>
   </div>
@@ -538,28 +538,28 @@
 
 <div class="modal-overlay" id="ocImportOverlay">
   <div class="modal-box wide">
-    <p style="font-weight:700;">Импорт остатков в 1С</p>
-    <div class="footer-note" style="margin-bottom:6px;">
+    <p class="modal-title">Импорт остатков в 1С</p>
+    <div class="footer-note mb-6">
       Выгрузка <b>.xlsx</b> из 1С («Остатки и доступность товаров») —
       столбцы Артикул / Номенклатура / В наличии распознаются сами.
     </div>
 
     <div class="field-label">Склад «Ферма» — мой (обновит остатки в 1С)</div>
-    <input type="file" id="ocImportFile" accept=".xlsx" style="width:100%; font-size:13px;">
-    <div class="footer-note" id="ocImportFileInfo" style="margin-bottom:10px;"></div>
+    <input type="file" id="ocImportFile" accept=".xlsx" class="file-input">
+    <div class="footer-note mb-10" id="ocImportFileInfo"></div>
 
     <div class="field-label">Склад «Бестужевская» — второй (сохранится отдельно)</div>
-    <input type="file" id="ocImportFileBest" accept=".xlsx" style="width:100%; font-size:13px;">
-    <div class="footer-note" id="ocImportFileBestInfo" style="margin-bottom:6px;"></div>
-    <button class="util" id="ocPasteBtn" style="width:100%; margin-bottom:8px;">📋 Вставить строки Excel</button>
-    <button class="util" id="ocCompareBtn" style="width:100%; margin-bottom:8px;">⚖️ Сравнить остатки</button>
-    <button class="util" id="ocTransferBtn" style="width:100%; margin-bottom:8px;">🚚 Перемещение</button>
-    <div class="footer-note" id="ocImportHint" style="margin-top:6px;">
+    <input type="file" id="ocImportFileBest" accept=".xlsx" class="file-input">
+    <div class="footer-note mb-6" id="ocImportFileBestInfo"></div>
+    <button class="util full-w mb-8" id="ocPasteBtn">📋 Вставить строки Excel</button>
+    <button class="util full-w mb-8" id="ocCompareBtn">⚖️ Сравнить остатки</button>
+    <button class="util full-w mb-8" id="ocTransferBtn">🚚 Перемещение</button>
+    <div class="footer-note mt-6" id="ocImportHint">
       Существующие позиции: обновится только остаток (название, код и связь
       с учётом не трогаются). Новые позиции добавятся в 1С.
       Модель проставится автоматически по метке в названии.
     </div>
-    <div class="modal-actions" style="margin-top:10px;">
+    <div class="modal-actions mt-10">
       <button class="confirm-no" id="ocImportClose">Отмена</button>
       <button class="confirm-yes accent" id="ocImportRun">Импортировать</button>
     </div>
@@ -568,17 +568,17 @@
 
 <!-- Импорт количеств на склад: только код + количество -->
 <div class="modal-overlay" id="whImportOverlay">
-  <div class="modal-box wide" style="position:relative;">
+  <div class="modal-box wide pos-rel">
     <button class="modal-x" id="whImportX" title="Закрыть">✕</button>
-    <p style="font-weight:700;">Импорт на склад</p>
-    <div class="footer-note" style="margin-bottom:8px;">
+    <p class="modal-title">Импорт на склад</p>
+    <div class="footer-note mb-8">
       Файл <b>.xlsx</b> со столбцами <b>Код</b> и <b>Количество</b>. Обновятся
       только количества у позиций с совпавшим кодом — названия, разделы и
       модели не изменятся. Позиции, которых нет в файле, не трогаются.
     </div>
-    <input type="file" id="whImportFile" accept=".xlsx" style="width:100%; font-size:13px;">
-    <div class="footer-note" id="whImportInfo" style="margin-top:6px;"></div>
-    <div class="modal-actions" style="margin-top:10px;">
+    <input type="file" id="whImportFile" accept=".xlsx" class="file-input">
+    <div class="footer-note mt-6" id="whImportInfo"></div>
+    <div class="modal-actions mt-10">
       <button class="confirm-no" id="whImportClose">Отмена</button>
       <button class="confirm-yes accent" id="whImportRun">Импортировать</button>
     </div>
@@ -587,10 +587,10 @@
 
 <div class="modal-overlay" id="whTransferOverlay">
   <div class="modal-box wide">
-    <p id="whTransferTitle" style="font-weight:700;">Список</p>
-    <textarea id="whTransferArea" style="width:100%; min-height:170px; font-family:monospace; font-size:12px; padding:8px; border:1px solid var(--border); border-radius:8px; box-sizing:border-box;"></textarea>
-    <div class="footer-note" id="whTransferHint" style="margin-top:6px;"></div>
-    <div class="modal-actions" style="margin-top:10px;">
+    <p id="whTransferTitle" class="modal-title">Список</p>
+    <textarea id="whTransferArea" class="paste-textarea"></textarea>
+    <div class="footer-note mt-6" id="whTransferHint"></div>
+    <div class="modal-actions mt-10">
       <button class="confirm-no" id="whTransferClose">Закрыть</button>
       <button class="confirm-yes accent" id="whTransferAction">Скопировать</button>
     </div>
@@ -600,33 +600,33 @@
 <!-- Модалка: синхронизация через GitHub Gist -->
 <div class="modal-overlay" id="syncOverlay">
   <div class="modal-box wide">
-    <p style="font-weight:700;">Синхронизация между устройствами</p>
+    <p class="modal-title">Синхронизация между устройствами</p>
     <div class="sync-status-line" id="syncStatusLine">Не настроено</div>
     <div class="field-label">Роль этого устройства</div>
-    <label style="display:flex; align-items:center; gap:10px; margin:4px 0 4px; padding:8px 10px; background:#f8fafc; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
-      <input type="checkbox" id="syncPrimaryToggle" style="width:20px; height:20px; flex:0 0 auto;">
-      <span style="font-size:13px;">Главное устройство — только отправляет данные на сервер; при конфликте побеждает всегда оно</span>
+    <label class="role-toggle">
+      <input type="checkbox" id="syncPrimaryToggle">
+      <span>Главное устройство — только отправляет данные на сервер; при конфликте побеждает всегда оно</span>
     </label>
-    <div class="sync-help" style="margin-top:0;">
+    <div class="sync-help mt-0">
       Выключено — устройство только получает данные с сервера: свои изменения (если есть) отправляет, но при
       конфликте автоматически проигрывает и без вопросов подтягивает версию с сервера. Также само периодически
       проверяет сервер, пока открыто.
     </div>
     <div class="field-label">Резервная копия</div>
-    <div style="display:flex; gap:8px;">
-      <button class="btn" id="backupSaveBtn" style="flex:1;">💾 Сохранить копию</button>
-      <button class="btn" id="backupLoadBtn" style="flex:1;">📂 Восстановить</button>
+    <div class="flex-row gap-8">
+      <button class="btn flex-1" id="backupSaveBtn">💾 Сохранить копию</button>
+      <button class="btn flex-1" id="backupLoadBtn">📂 Восстановить</button>
     </div>
-    <input type="file" id="backupFileInput" accept=".json" style="display:none;">
-    <div class="sync-help" style="margin-top:4px;">
+    <input type="file" id="backupFileInput" accept=".json" class="hide-init">
+    <div class="sync-help mt-4">
       Сохраняет все данные (склад, 1С, учёт за все дни, списки) в один файл.
       Делайте копию раз в неделю: при потере телефона или очистке данных
       сайта восстановитесь из неё. Токен и пароль в файл не попадают.
     </div>
 
     <div class="field-label">Пароль настроек синхронизации</div>
-    <button class="btn" id="syncPwBtn" style="width:100%;">Задать / изменить пароль</button>
-    <div class="sync-help" style="margin-top:4px;">
+    <button class="btn full-w" id="syncPwBtn">Задать / изменить пароль</button>
+    <div class="sync-help mt-4">
       Без пароля это меню не откроется (долгое нажатие на облачко). Короткое нажатие пароль не спрашивает —
       оно просто отправляет/забирает данные согласно роли устройства.
     </div>
@@ -638,9 +638,9 @@
       <button class="confirm-no" id="syncClose">Закрыть</button>
       <button class="confirm-yes accent" id="syncSaveBtn">Сохранить и синхр.</button>
     </div>
-    <div class="modal-actions" style="margin-top:6px;">
-      <button class="confirm-no" id="syncPullBtn" style="background:#e2e8f0;">⇩ Обновить с сервера</button>
-      <button class="confirm-no" id="syncForgetBtn" style="background:#fecaca;">Отключить</button>
+    <div class="modal-actions mt-6">
+      <button class="confirm-no bg-neutral" id="syncPullBtn">⇩ Обновить с сервера</button>
+      <button class="confirm-no bg-danger-soft" id="syncForgetBtn">Отключить</button>
     </div>
     <div class="sync-help">
       Как получить токен:
@@ -658,12 +658,12 @@
 <!-- Модалка: история сохранений (когда и что синхронизировалось) -->
 <div class="modal-overlay" id="syncHistoryOverlay">
   <div class="modal-box wide">
-    <p style="font-weight:700;">История сохранений</p>
-    <div class="sync-status-line" style="margin-bottom:8px;">
+    <p class="modal-title">История сохранений</p>
+    <div class="sync-status-line mb-8">
       Время, направление синхронизации и какие позиции добавились/удалились/изменили количество. Хранится только на этом устройстве.
     </div>
     <div id="syncHistoryList" class="sync-history-list"></div>
-    <div class="modal-actions" style="margin-top:10px;">
+    <div class="modal-actions mt-10">
       <button class="confirm-yes accent full-w" id="syncHistoryClose">Закрыть</button>
     </div>
   </div>
