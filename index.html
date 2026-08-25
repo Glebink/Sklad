@@ -129,6 +129,7 @@
     <div class="suggest-box" id="whAddSuggestBox"></div>
     <div class="corner-row full-row">
       <button class="util" id="whResetBtn">Обнулить</button>
+      <button class="util" id="whImportBtn" title="Импорт количеств из файла">⬆ Импорт</button>
       <button class="util primary" id="whAddBtn">+ Добавить</button>
     </div>
   </div>
@@ -204,10 +205,11 @@
       <button class="iconbtn" id="ocFilterBtn" title="Фильтр списка">⛃</button>
       <div class="menu-panel list" id="ocFilterPanel">
         <button class="util" data-filter="all">Всё</button>
-        <button class="util" data-filter="parts">Детали</button>
         <button class="util" data-filter="consumables">Расходники</button>
+        <button class="util" data-filter="9Bot">9Bot</button>
+        <button class="util" data-filter="YGW 4.0">YGW 4.0</button>
+        <button class="util" data-filter="YGW 5.0">YGW 5.0</button>
         <button class="util" data-filter="stock">Остаток</button>
-        <button class="util" data-filter="ab">Временные AB</button>
       </div>
     </div>
     <input type="number" id="ocFilterQty" min="0" value="20" title="Показывать позиции с остатком меньше этого числа" style="display:none; width:56px; margin:0 0 0 6px; padding:6px; font-size:13px;">
@@ -560,6 +562,25 @@
     <div class="modal-actions" style="margin-top:10px;">
       <button class="confirm-no" id="ocImportClose">Отмена</button>
       <button class="confirm-yes accent" id="ocImportRun">Импортировать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Импорт количеств на склад: только код + количество -->
+<div class="modal-overlay" id="whImportOverlay">
+  <div class="modal-box wide" style="position:relative;">
+    <button class="modal-x" id="whImportX" title="Закрыть">✕</button>
+    <p style="font-weight:700;">Импорт на склад</p>
+    <div class="footer-note" style="margin-bottom:8px;">
+      Файл <b>.xlsx</b> со столбцами <b>Код</b> и <b>Количество</b>. Обновятся
+      только количества у позиций с совпавшим кодом — названия, разделы и
+      модели не изменятся. Позиции, которых нет в файле, не трогаются.
+    </div>
+    <input type="file" id="whImportFile" accept=".xlsx" style="width:100%; font-size:13px;">
+    <div class="footer-note" id="whImportInfo" style="margin-top:6px;"></div>
+    <div class="modal-actions" style="margin-top:10px;">
+      <button class="confirm-no" id="whImportClose">Отмена</button>
+      <button class="confirm-yes accent" id="whImportRun">Импортировать</button>
     </div>
   </div>
 </div>

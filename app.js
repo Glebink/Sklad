@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v87";
+const APP_VERSION = "v88";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -2338,7 +2338,10 @@ function colToIndex(ref) {          // "AB12" -> 27 (1-based номер стол
   for (const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64);
   return n;
 }
-async function parseXlsxFile(file) {
+/* Чтение таблицы .xlsx в «сетку»: массив строк, где строка — объект
+   { номер_столбца: значение }. Общая часть для обоих разборов — выгрузки
+   1С и простого файла склада. */
+async function readXlsxGrid(file) {
   const buf = await file.arrayBuffer();
   const files = await readZipEntries(buf, ["xl/sharedStrings.xml", "xl/worksheets/sheet1.xml"]);
   const dec = new TextDecoder("utf-8");
@@ -2373,6 +2376,10 @@ async function parseXlsxFile(file) {
     });
     rows.push(cells);
   });
+  return rows;
+}
+async function parseXlsxFile(file) {
+  const rows = await readXlsxGrid(file);
   // Столбцы: A(1) — Артикул, D(4) — Номенклатура, H(8) — «В наличии».
   // Именно так устроена выгрузка «Остатки и доступность товаров» из УТ 11.
   // Заголовки ищем сами, чтобы не сломаться, если 1С сдвинет колонки.
@@ -2969,6 +2976,97 @@ document.getElementById("ocImportRun").addEventListener("click", () => {
   alert(`Готово: обновлено ${updated}, добавлено ${added}` + (zeroed.length ? `, обнулено ${zeroed.length}` : "") + ".");
 });
 
+/* ==================== Импорт количеств на склад ====================
+   Простой режим: в файле только код и количество. Обновляем количество у
+   совпавших по коду позиций, ничего больше не трогаем — ни названия, ни
+   разделы, ни модели. Позиции, которых нет в файле, остаются как есть
+   (в отличие от импорта в 1С, где отсутствие означает нулевой остаток). */
+let whImportRows = null;
+/* Простой разбор таблицы для склада: два столбца — код и количество.
+   Отдельно от разбора выгрузки 1С, где своя структура с заголовками.
+   Строка-заголовок («Код», «Количество») распознаётся и пропускается. */
+async function parseSimpleXlsx(file) {
+  const rows = await readXlsxGrid(file);
+  const out = [];
+  rows.forEach((cells) => {
+    const keys = Object.keys(cells).map(Number).sort((a, b) => a - b);
+    if (keys.length === 0) return;
+    const code = String(cells[keys[0]] || "").trim();
+    if (!code) return;
+    // второй непустой столбец — количество
+    let qty = 0;
+    for (let k = 1; k < keys.length; k++) {
+      const raw = String(cells[keys[k]] || "").replace(/\s|\u00a0/g, "").replace(",", ".");
+      if (raw === "") continue;
+      const n = parseFloat(raw);
+      if (!isNaN(n)) { qty = Math.max(0, Math.round(n)); }
+      break;
+    }
+    // пропускаем заголовок вида «Код | Количество»
+    if (/^(код|артикул)$/i.test(code)) return;
+    out.push({ code, qty });
+  });
+  return out;
+}
+function findWhItemByCode(code) {
+  if (!code) return null;
+  const want = codeVariants(code);
+  for (const section of ["parts", "consumables"]) {
+    const list = warehouse[section];
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].code && codeVariants(list[i].code).some((v) => want.includes(v))) {
+        return { section, index: i };
+      }
+    }
+  }
+  return null;
+}
+document.getElementById("whImportBtn").addEventListener("click", () => {
+  whImportRows = null;
+  document.getElementById("whImportFile").value = "";
+  document.getElementById("whImportInfo").textContent = "";
+  document.getElementById("whImportOverlay").classList.add("open");
+});
+function closeWhImport() { document.getElementById("whImportOverlay").classList.remove("open"); }
+document.getElementById("whImportClose").addEventListener("click", closeWhImport);
+document.getElementById("whImportX").addEventListener("click", closeWhImport);
+document.getElementById("whImportFile").addEventListener("change", async (e) => {
+  const file = e.target.files && e.target.files[0];
+  const info = document.getElementById("whImportInfo");
+  whImportRows = null;
+  if (!file) { info.textContent = ""; return; }
+  info.textContent = "Читаю файл…";
+  try {
+    const rows = await parseSimpleXlsx(file);
+    whImportRows = rows;
+    const known = whImportRows.filter((r) => findWhItemByCode(r.code)).length;
+    info.textContent = `Прочитано ${whImportRows.length} строк · найдено на складе: ${known}` +
+      (whImportRows.length - known ? ` · нет на складе: ${whImportRows.length - known}` : "");
+  } catch (err) {
+    info.textContent = "Не удалось прочитать файл: " + err.message;
+  }
+});
+document.getElementById("whImportRun").addEventListener("click", () => {
+  if (!whImportRows || whImportRows.length === 0) { alert("Выберите файл .xlsx."); return; }
+  let updated = 0, skipped = 0;
+  const plan = [];
+  whImportRows.forEach((r) => {
+    const found = findWhItemByCode(r.code);
+    if (!found) { skipped++; return; }
+    plan.push({ found, qty: r.qty });
+    updated++;
+  });
+  if (updated === 0) { alert("Ни одного кода из файла нет на складе."); return; }
+  const skipMsg = skipped ? `\n\n${skipped} поз. из файла на складе нет — они пропущены.` : "";
+  if (!confirm(`Обновить количество у ${updated} поз. на складе?${skipMsg}`)) return;
+  pushWhHistory();
+  plan.forEach((p) => { warehouse[p.found.section][p.found.index].qty = p.qty; });
+  saveWarehouse();
+  renderWarehouseAll();
+  closeWhImport();
+  alert(`Готово: обновлено ${updated}` + (skipped ? `, пропущено ${skipped}` : "") + ".");
+});
+
 /* ==================== Резервная копия ====================
    Выгружает все данные приложения в один файл и восстанавливает из него.
    Токен GitHub и пароль настроек НЕ выгружаются — файл можно спокойно
@@ -3181,6 +3279,17 @@ function runModelMigrationOnce() {
   // Трогаем только позиции, у которых поле model ещё НИ РАЗУ не задавалось
   // (undefined) — явно выбранное «без версии» (пустая строка) не перетираем.
   let touched = false;
+  // Коды вида «AB.xx.xxxx» — это номенклатура 9Bot. Раньше они шли отдельной
+  // категорией «временные», теперь просто помечаем моделью. Ставим даже
+  // поверх пустого значения, потому что раньше эти позиции сохранялись
+  // без модели вовсе.
+  ["parts", "consumables"].forEach((section) => {
+    [warehouse[section], onec[section]].forEach((list) => {
+      list.forEach((it) => {
+        if (isAbCode(it.code) && (it.model || "") !== "9Bot") { it.model = "9Bot"; touched = true; }
+      });
+    });
+  });
   ["parts", "consumables"].forEach((section) => {
     warehouse[section].forEach((it) => {
       const model = detectModelFromName(it.name);
@@ -3429,10 +3538,11 @@ function ocFilteredPairs(section) {
   if (section === "consumables" && ocFilter.mode === "stock" && !ocFilter.showCons) return [];
   const pairs = onec[section].map((item, i) => ({ item, i }));
   switch (ocFilter.mode) {
-    case "parts":        return section === "parts" ? pairs : [];
     case "consumables":  return section === "consumables" ? pairs : [];
     case "stock":        return pairs.filter(({ item }) => (item.qty || 0) < (ocFilter.qty || 0));
-    case "ab":           return pairs.filter(({ item }) => isAbCode(item.code));
+    case "9Bot":
+    case "YGW 4.0":
+    case "YGW 5.0":      return pairs.filter(({ item }) => (item.model || "") === ocFilter.mode);
     default:             return pairs;
   }
 }
@@ -3507,7 +3617,8 @@ function updateOcFilterUI() {
   // подпись рядом с кнопкой фильтра + поле количества только для «Остаток»
   const label = document.getElementById("ocFilterLabel");
   const qtyInput = document.getElementById("ocFilterQty");
-  const names = { all: "Всё", parts: "Детали", consumables: "Расходники", stock: "Остаток", ab: "Временные AB" };
+  const names = { all: "Всё", consumables: "Расходники", stock: "Остаток",
+                  "9Bot": "9Bot", "YGW 4.0": "YGW 4.0", "YGW 5.0": "YGW 5.0" };
   const shown = ocFilteredPairs("parts").length + ocFilteredPairs("consumables").length;
   if (label) label.textContent = `${names[ocFilter.mode] || ""} · ${shown}`;
   if (qtyInput) {
