@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v86";
+const APP_VERSION = "v87";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1804,6 +1804,7 @@ document.querySelectorAll("#whFilterPanel [data-model]").forEach((btn) => {
     saveWhFilter();
     document.getElementById("whFilterPanel").classList.remove("open");
     renderWarehouseAll();      // только перерисовка, без синхронизации
+    applyWhSearch();           // строки перерисованы — заново подсветим найденное
   });
 });
 document.addEventListener("click", (e) => {
@@ -3536,17 +3537,20 @@ document.querySelectorAll("#ocFilterPanel [data-filter]").forEach((btn) => {
     saveOcFilter();
     document.getElementById("ocFilterPanel").classList.remove("open");
     renderOneCAll();          // только перерисовка, без синхронизации
+    applyOcSearch();
   });
 });
 document.getElementById("ocConsToggle").addEventListener("click", () => {
   ocFilter.showCons = !ocFilter.showCons;
   saveOcFilter();
   renderOneCAll();          // только перерисовка, без синхронизации
+  applyOcSearch();
 });
 document.getElementById("ocFilterQty").addEventListener("input", (e) => {
   ocFilter.qty = Math.max(0, parseInt(e.target.value, 10) || 0);
   saveOcFilter();
   renderOneCAll();
+  applyOcSearch();
 });
 document.addEventListener("click", (e) => {
   if (!e.target.closest(".oc-filter-wrap")) {
@@ -3884,8 +3888,17 @@ function runSearch(k, bodyPrefix, store, matchFn) {
   ["parts", "consumables"].forEach((section) => {
     const tbody = document.getElementById(bodyPrefix + section);
     if (!tbody) return;
+    // Берём позиции ровно в том порядке, в каком они нарисованы. Раньше
+    // здесь было store[section][i] — номер строки на экране использовался
+    // как индекс в данных, и при включённом фильтре (склад — по модели,
+    // 1С — по разделу/остатку) поиск сверялся не с теми позициями.
+    const visible = (bodyPrefix === "wh-body-" && typeof whFilteredPairs === "function")
+      ? whFilteredPairs(section).map((p) => p.item)
+      : (bodyPrefix === "oc-body-" && typeof ocFilteredPairs === "function")
+        ? ocFilteredPairs(section).map((p) => p.item)
+        : store[section];
     Array.prototype.forEach.call(tbody.querySelectorAll("tr"), (tr, i) => {
-      const item = store[section][i];
+      const item = visible[i];
       if (!item) return;
       const hit = q.length > 0 && matchFn(item, q);
       tr.classList.toggle("row-match", hit);
