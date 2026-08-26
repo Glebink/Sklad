@@ -554,7 +554,7 @@
      раньше акцентный цвет дублировался инлайном в 9 модалках. */
   .modal-actions .confirm-yes.accent { background: var(--accent); }
   .modal-actions .confirm-no { background: #e5e7eb; color: #1f2430; }
-  .modal-actions .full-w { width: 100%; }
+  .full-w { width: 100%; }
   /* Выпадающий список внутри модалки — раньше один и тот же длинный набор
      свойств дублировался инлайном в трёх формах редактирования. */
   .modal-box select {
@@ -1108,3 +1108,58 @@
        остаются поверх печатного листа. */
     #topBtn, #backBtn, #syncBtn { display: none !important; }
   }
+
+  /* ==================== Утилитарные классы ====================
+     Раньше в index.html было ~94 инлайн-style="" — повторяющиеся (отступы,
+     flex-обёртки, скрытие по умолчанию) вынесены сюда классами; единичные,
+     привязанные к одной конкретной кнопке/полю — правилами по #id ниже. */
+  .modal-title { font-weight: 700; }
+  .pos-rel { position: relative; }
+  .hide-init { display: none; }
+  .flex-1 { flex: 1; }
+  .flex-1-0 { flex: 1; min-width: 0; }
+  .field-narrow { flex: 0 0 92px; }
+  .field-w110 { width: 110px; flex: 0 0 auto; }
+  .field-w106 { flex: 0 0 106px; }
+  .readonly-field { background: #f1f5f9; }
+  .mono-field { font-family: monospace; }
+  .bg-neutral { background: #e2e8f0; }
+  .bg-danger-soft { background: #fecaca; }
+  .file-input { width: 100%; font-size: 13px; }
+  .suggest-box-inset { left: 20px; right: 20px; }
+  .paste-textarea {
+    width: 100%; min-height: 170px; font-family: monospace; font-size: 12px;
+    padding: 8px; border: 1px solid var(--border); border-radius: 8px; box-sizing: border-box;
+  }
+  .paste-textarea.tall { min-height: 180px; }
+  .flex-row { display: flex; gap: 10px; }
+  .flex-row.gap-8 { gap: 8px; }
+  .mt-0  { margin-top: 0; }
+  .mt-4  { margin-top: 4px; }
+  .mt-6  { margin-top: 6px; }
+  .mt-8  { margin-top: 8px; }
+  .mt-10 { margin-top: 10px; }
+  .mt-12 { margin-top: 12px; }
+  .mb-6  { margin-bottom: 6px; }
+  .mb-8  { margin-bottom: 8px; }
+  .mb-10 { margin-bottom: 10px; }
+  .modal-actions.stack { flex-direction: column; gap: 8px; }
+  /* Сравнение остатков — строка фильтров и строка поиска (раньше — инлайн) */
+  .cmp-filter-row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+  .cmp-search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  /* Тумблер «главное устройство» в настройках синхронизации */
+  .role-toggle {
+    display: flex; align-items: center; gap: 10px; margin: 4px 0 4px;
+    padding: 8px 10px; background: #f8fafc; border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer;
+  }
+  .role-toggle input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 auto; }
+  .role-toggle span { font-size: 13px; }
+
+  /* ==================== Правила по #id для единичных инлайн-style ==================== */
+  #ocAddBtn { width: auto; padding: 0 16px; }
+  /* display не задаём здесь: JS переключает его через element.style.display
+     между "" и "none" (updateOcFilterUI) — CSS-правило с display:none тут
+     перебило бы очистку инлайн-стиля в JS и поле никогда бы не появлялось. */
+  #ocFilterQty { width: 56px; margin: 0 0 0 6px; padding: 6px; font-size: 13px; }
+  #printLabelAddRow { width: 100%; font-size: 22px; font-weight: 700; margin-top: 6px; }

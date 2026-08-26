@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v88";
+const APP_VERSION = "v89";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -577,6 +577,20 @@ function formatCodeDisplay(code) {
   const parts = escapeHtml(code).split("/").map((s) => s.trim()).filter(Boolean);
   if (parts.length <= 1) return escapeHtml(code);
   return `<span class="code-split">${parts.map((p) => `<span class="code-line">${p}</span>`).join("")}</span>`;
+}
+
+/* ==================== Модалки: открыть/закрыть ====================
+   Раньше каждая из 17 модалок открывалась/закрывалась своей парой
+   document.getElementById(id).classList.add/remove("open") — один и тот же
+   код почти 50 раз. Принимает и id (строку), и уже найденный элемент —
+   в паре мест элемент был закэширован в константу заранее. */
+function openModal(idOrEl) {
+  const el = typeof idOrEl === "string" ? document.getElementById(idOrEl) : idOrEl;
+  if (el) el.classList.add("open");
+}
+function closeModal(idOrEl) {
+  const el = typeof idOrEl === "string" ? document.getElementById(idOrEl) : idOrEl;
+  if (el) el.classList.remove("open");
 }
 
 /* ==================== Загрузка/сохранение ==================== */
@@ -1026,12 +1040,12 @@ function openQtyAdjust(section, index, mode) {
   document.getElementById("qtyAdjustConfirm").textContent = mode === "plus" ? "Добавить" : "Списать";
   document.getElementById("qtyAdjustConfirm").style.background = mode === "plus" ? "var(--accent)" : "var(--danger)";
   qtyAdjustInput.value = "";
-  document.getElementById("qtyAdjustOverlay").classList.add("open");
+  openModal("qtyAdjustOverlay");
   setTimeout(() => qtyAdjustInput.focus(), 50);
 }
 function closeQtyAdjust() {
   pendingQtyAdjust = null;
-  document.getElementById("qtyAdjustOverlay").classList.remove("open");
+  closeModal("qtyAdjustOverlay");
 }
 document.getElementById("qtyAdjustCancel").addEventListener("click", closeQtyAdjust);
 document.getElementById("qtyAdjustOverlay").addEventListener("click", (e) => {
@@ -1080,7 +1094,7 @@ let pendingDelete = null; // { kind: 'reset'|'warehouse'|'whReset'|'onec'|'delet
 function openConfirmDelete(kind, text, section, index) {
   pendingDelete = { kind, section, index };
   document.getElementById("confirmText").textContent = text;
-  document.getElementById("confirmOverlay").classList.add("open");
+  openModal("confirmOverlay");
 }
 function openConfirmWarehouse(section, index) {
   const item = warehouse[section][index];
@@ -1090,7 +1104,7 @@ function openConfirmWarehouse(section, index) {
 }
 function closeConfirm() {
   pendingDelete = null;
-  document.getElementById("confirmOverlay").classList.remove("open");
+  closeModal("confirmOverlay");
 }
 document.getElementById("confirmNo").addEventListener("click", closeConfirm);
 document.getElementById("confirmOverlay").addEventListener("click", (e) => {
@@ -1277,12 +1291,12 @@ function openEditItem(section, index) {
   editItemInput.value = item.name;
   document.getElementById("editItemSection").value = section;
   editSuggestBox.classList.remove("open");
-  document.getElementById("editItemOverlay").classList.add("open");
+  openModal("editItemOverlay");
   setTimeout(() => { editItemInput.focus(); editItemInput.select(); }, 50);
 }
 function closeEditItem() {
   editingTarget = null;
-  document.getElementById("editItemOverlay").classList.remove("open");
+  closeModal("editItemOverlay");
 }
 editItemInput.addEventListener("input", () => {
   editPicked = null;
@@ -1395,11 +1409,11 @@ function openHistory(section, item) {
   document.getElementById("historyFrom").value = "";
   document.getElementById("historyTo").value = "";
   renderHistoryList();
-  document.getElementById("historyOverlay").classList.add("open");
+  openModal("historyOverlay");
 }
 function closeHistory() {
   historyTarget = null;
-  document.getElementById("historyOverlay").classList.remove("open");
+  closeModal("historyOverlay");
 }
 document.getElementById("historyFrom").addEventListener("change", renderHistoryList);
 document.getElementById("historyTo").addEventListener("change", renderHistoryList);
@@ -1601,10 +1615,10 @@ function openPrintLabelModal() {
   if (draft.length === 0) container.appendChild(createPrintLabelRow());
   else draft.forEach((d) => container.appendChild(createPrintLabelRow(d)));
   renumberPrintLabelRows();
-  document.getElementById("printLabelOverlay").classList.add("open");
+  openModal("printLabelOverlay");
 }
 function closePrintLabelModal() {
-  document.getElementById("printLabelOverlay").classList.remove("open");
+  closeModal("printLabelOverlay");
 }
 document.getElementById("printLabelBtn").addEventListener("click", openPrintLabelModal);
 document.getElementById("printLabelCancel").addEventListener("click", closePrintLabelModal);
@@ -1770,6 +1784,27 @@ function renderWarehouseAll() {
   renderWarehouseSection("consumables");
   updateWhFilterUI();
 }
+/* Общая для «Склада» и «1С»: прячет пустой после фильтра раздел (таблицу и
+   заголовок), кроме шапки с кнопкой фильтра — иначе из режима, где раздел
+   пуст, нельзя было бы переключиться обратно. Заголовок раздела — только
+   элемент прямо перед таблицей: идти назад «до первого .section-head»
+   нельзя, у «Расходников» заголовок — простой h2, и поиск добирался бы до
+   шапки «Деталей», пряча её вместе с кнопкой фильтра. */
+function hideEmptySections(bodyPrefix, filterBtnId) {
+  ["parts", "consumables"].forEach((section) => {
+    const tbody = document.getElementById(bodyPrefix + section);
+    if (!tbody) return;
+    const empty = tbody.children.length === 0;
+    const table = tbody.closest(".table-scroll");
+    if (table) table.style.display = empty ? "none" : "";
+    const head = table ? table.previousElementSibling : null;
+    const hasFilter = head && head.querySelector && head.querySelector("#" + filterBtnId);
+    if (head && !hasFilter &&
+        (head.classList.contains("section-head") || head.classList.contains("section-title"))) {
+      head.style.display = empty ? "none" : "";
+    }
+  });
+}
 function updateWhFilterUI() {
   const label = document.getElementById("whFilterLabel");
   if (label) {
@@ -1779,20 +1814,7 @@ function updateWhFilterUI() {
   document.querySelectorAll("#whFilterPanel [data-model]").forEach((b) => {
     b.classList.toggle("primary", b.dataset.model === whFilterModel);
   });
-  // прячем пустой раздел (кроме шапки с кнопкой фильтра)
-  ["parts", "consumables"].forEach((section) => {
-    const tbody = document.getElementById("wh-body-" + section);
-    if (!tbody) return;
-    const empty = tbody.children.length === 0;
-    const table = tbody.closest(".table-scroll");
-    if (table) table.style.display = empty ? "none" : "";
-    const head = table ? table.previousElementSibling : null;
-    const hasFilter = head && head.querySelector && head.querySelector("#whFilterBtn");
-    if (head && !hasFilter &&
-        (head.classList.contains("section-head") || head.classList.contains("section-title"))) {
-      head.style.display = empty ? "none" : "";
-    }
-  });
+  hideEmptySections("wh-body-", "whFilterBtn");
 }
 document.getElementById("whFilterBtn").addEventListener("click", (e) => {
   e.stopPropagation();
@@ -1855,10 +1877,22 @@ function resetRowMenu(panel) {
   panel.style.position = "";
   panel.style.top = panel.style.left = panel.style.bottom = panel.style.right = "";
 }
-function closeAllWhMenus(except) {
-  document.querySelectorAll(".wh-menu-panel.open").forEach((p) => {
+/* Общая для «Склада» и «1С»: закрывает все открытые меню строк заданного
+   класса, кроме `except` (обычно — только что открытое). */
+function closeAllRowMenus(panelClass, except) {
+  document.querySelectorAll("." + panelClass + ".open").forEach((p) => {
     if (p !== except) { p.classList.remove("open"); resetRowMenu(p); }
   });
+}
+function closeAllWhMenus(except) { closeAllRowMenus("wh-menu-panel", except); }
+/* Общая для «Склада» и «1С»: открывает/закрывает меню строки по кнопке «⋮»,
+   предварительно закрыв остальные такие же меню. */
+function toggleRowMenu(btn, panelClass, closeAllFn) {
+  const panel = btn.parentElement.querySelector("." + panelClass);
+  const willOpen = !panel.classList.contains("open");
+  closeAllFn();
+  panel.classList.toggle("open", willOpen);
+  if (willOpen) placeRowMenu(panel); else resetRowMenu(panel);
 }
 function handleWarehouseClick(e) {
   const section = e.currentTarget.id.replace("wh-body-", "");
@@ -1867,11 +1901,7 @@ function handleWarehouseClick(e) {
     const index = parseInt(btn.dataset.index, 10);
     if (btn.classList.contains("wh-menu-btn")) {
       e.stopPropagation();
-      const panel = btn.parentElement.querySelector(".wh-menu-panel");
-      const willOpen = !panel.classList.contains("open");
-      closeAllWhMenus();
-      panel.classList.toggle("open", willOpen);
-      if (willOpen) placeRowMenu(panel); else resetRowMenu(panel);
+      toggleRowMenu(btn, "wh-menu-panel", closeAllWhMenus);
       return;
     }
     closeAllWhMenus();
@@ -1962,13 +1992,13 @@ function openWhEdit(section, index) {
   setModelSwitch(document.getElementById("whEditModel"), item.model || "");
   const box = document.getElementById("whEditSuggestBox");
   if (box) { box.classList.remove("open"); box.innerHTML = ""; }
-  document.getElementById("whEditOverlay").classList.add("open");
+  openModal("whEditOverlay");
 }
 function closeWhEdit() {
   whEditingTarget = null;
   const box = document.getElementById("whEditSuggestBox");
   if (box) { box.classList.remove("open"); box.innerHTML = ""; }
-  document.getElementById("whEditOverlay").classList.remove("open");
+  closeModal("whEditOverlay");
 }
 document.getElementById("whEditCancel").addEventListener("click", closeWhEdit);
 document.getElementById("whEditOverlay").addEventListener("click", (e) => {
@@ -2508,10 +2538,10 @@ function openOcImport() {
   } else {
     bestInfo.textContent = "";
   }
-  document.getElementById("ocImportOverlay").classList.add("open");
+  openModal("ocImportOverlay");
 }
 function closeOcImport() {
-  document.getElementById("ocImportOverlay").classList.remove("open");
+  closeModal("ocImportOverlay");
 }
 document.getElementById("ocImportBtn").addEventListener("click", openOcImport);
 document.getElementById("ocImportClose").addEventListener("click", closeOcImport);
@@ -2632,11 +2662,11 @@ function transferAsText() {
   ).join("\n");
 }
 document.getElementById("ocTransferBtn").addEventListener("click", () => {
-  document.getElementById("ocTransferOverlay").classList.add("open");
+  openModal("ocTransferOverlay");
   renderTransferList();
 });
 document.getElementById("ocTransferClose").addEventListener("click", () => {
-  document.getElementById("ocTransferOverlay").classList.remove("open");
+  closeModal("ocTransferOverlay");
 });
 document.getElementById("ocTransferClear").addEventListener("click", () => {
   if (transferList.length === 0) return;
@@ -2672,10 +2702,10 @@ document.getElementById("ocTransferPrint").addEventListener("click", () => {
 
 /* --- Ручная вставка строк Excel (вынесена в отдельное окно) --- */
 document.getElementById("ocPasteBtn").addEventListener("click", () => {
-  document.getElementById("ocPasteOverlay").classList.add("open");
+  openModal("ocPasteOverlay");
 });
 document.getElementById("ocPasteCancel").addEventListener("click", () => {
-  document.getElementById("ocPasteOverlay").classList.remove("open");
+  closeModal("ocPasteOverlay");
 });
 document.getElementById("ocPasteApply").addEventListener("click", () => {
   const raw = document.getElementById("ocImportArea").value.trim();
@@ -2685,7 +2715,7 @@ document.getElementById("ocPasteApply").addEventListener("click", () => {
   ocImportFileRows = rows;               // подставляем как источник для «Импортировать»
   document.getElementById("ocImportFileInfo").textContent =
     `Из вставленного текста: ${rows.length} строк. Нажмите «Импортировать».`;
-  document.getElementById("ocPasteOverlay").classList.remove("open");
+  closeModal("ocPasteOverlay");
 });
 
 /* ==================== Сравнение остатков между складами ====================
@@ -2829,7 +2859,7 @@ function ocCompareAsText() {
 }
 document.getElementById("ocCompareBtn").addEventListener("click", () => {
   document.getElementById("ocCompareSearch").value = "";
-  document.getElementById("ocCompareOverlay").classList.add("open");
+  openModal("ocCompareOverlay");
   runOcCompare();
 });
 document.getElementById("ocCompareLimit").addEventListener("change", runOcCompare);
@@ -2846,10 +2876,10 @@ document.getElementById("ocCompareSearchClear").addEventListener("click", () => 
   input.focus();
 });
 document.getElementById("ocCompareX").addEventListener("click", () => {
-  document.getElementById("ocCompareOverlay").classList.remove("open");
+  closeModal("ocCompareOverlay");
 });
 document.getElementById("ocCompareClose").addEventListener("click", () => {
-  document.getElementById("ocCompareOverlay").classList.remove("open");
+  closeModal("ocCompareOverlay");
 });
 document.getElementById("ocCompareCopy").addEventListener("click", async () => {
   const text = ocCompareAsText();
@@ -3025,9 +3055,9 @@ document.getElementById("whImportBtn").addEventListener("click", () => {
   whImportRows = null;
   document.getElementById("whImportFile").value = "";
   document.getElementById("whImportInfo").textContent = "";
-  document.getElementById("whImportOverlay").classList.add("open");
+  openModal("whImportOverlay");
 });
-function closeWhImport() { document.getElementById("whImportOverlay").classList.remove("open"); }
+function closeWhImport() { closeModal("whImportOverlay"); }
 document.getElementById("whImportClose").addEventListener("click", closeWhImport);
 document.getElementById("whImportX").addEventListener("click", closeWhImport);
 document.getElementById("whImportFile").addEventListener("change", async (e) => {
@@ -3142,7 +3172,7 @@ function openWhCopy() {
   whTransferArea.readOnly = true;
   whTransferHint.textContent = "Текст ниже уже выделен — нажмите «Скопировать в буфер» (или Ctrl+C), затем вставьте его кнопкой «Вставить весь склад» в другом файле.";
   whTransferAction.textContent = "Скопировать в буфер";
-  document.getElementById("whTransferOverlay").classList.add("open");
+  openModal("whTransferOverlay");
   setTimeout(() => { whTransferArea.focus(); whTransferArea.select(); }, 60);
 }
 
@@ -3153,13 +3183,13 @@ function openWhPaste() {
   whTransferArea.readOnly = false;
   whTransferHint.textContent = "Вставьте сюда (Ctrl+V или долгим тапом) текст, скопированный кнопкой «Копировать весь склад».";
   whTransferAction.textContent = "Заменить склад";
-  document.getElementById("whTransferOverlay").classList.add("open");
+  openModal("whTransferOverlay");
   setTimeout(() => whTransferArea.focus(), 60);
 }
 
 function closeWhTransfer() {
   whTransferMode = null;
-  document.getElementById("whTransferOverlay").classList.remove("open");
+  closeModal("whTransferOverlay");
 }
 document.getElementById("whTransferClose").addEventListener("click", closeWhTransfer);
 document.getElementById("whTransferOverlay").addEventListener("click", (e) => {
@@ -3596,24 +3626,7 @@ function renderOneCAll() {
 function updateOcFilterUI() {
   const view = document.getElementById("viewOneC");
   if (!view) return;
-  ["parts", "consumables"].forEach((section) => {
-    const tbody = document.getElementById("oc-body-" + section);
-    if (!tbody) return;
-    const empty = tbody.children.length === 0;
-    const table = tbody.closest(".table-scroll");
-    if (table) table.style.display = empty ? "none" : "";
-    // Заголовок раздела — только элемент прямо перед таблицей. Идти назад
-    // «до первого .section-head» нельзя: у «Расходников» заголовок — простой
-    // h2, и поиск добирался до шапки «Деталей», пряча её вместе с кнопкой
-    // фильтра. Саму шапку с фильтром не прячем никогда — иначе из режима,
-    // где раздел пуст, нельзя было бы переключиться обратно.
-    const head = table ? table.previousElementSibling : null;
-    const hasFilter = head && head.querySelector && head.querySelector("#ocFilterBtn");
-    if (head && !hasFilter &&
-        (head.classList.contains("section-head") || head.classList.contains("section-title"))) {
-      head.style.display = empty ? "none" : "";
-    }
-  });
+  hideEmptySections("oc-body-", "ocFilterBtn");
   // подпись рядом с кнопкой фильтра + поле количества только для «Остаток»
   const label = document.getElementById("ocFilterLabel");
   const qtyInput = document.getElementById("ocFilterQty");
@@ -3671,11 +3684,7 @@ document.addEventListener("click", (e) => {
 });
 
 /* --- клики по строкам 1C --- */
-function closeAllOcMenus(except) {
-  document.querySelectorAll(".oc-menu-panel.open").forEach((p) => {
-    if (p !== except) { p.classList.remove("open"); resetRowMenu(p); }
-  });
-}
+function closeAllOcMenus(except) { closeAllRowMenus("oc-menu-panel", except); }
 function handleOneCClick(e) {
   const section = e.currentTarget.id.replace("oc-body-", "");
   const btn = e.target.closest("button");
@@ -3683,11 +3692,7 @@ function handleOneCClick(e) {
     const index = parseInt(btn.dataset.index, 10);
     if (btn.classList.contains("oc-menu-btn")) {
       e.stopPropagation();
-      const panel = btn.parentElement.querySelector(".oc-menu-panel");
-      const willOpen = !panel.classList.contains("open");
-      closeAllOcMenus();
-      panel.classList.toggle("open", willOpen);
-      if (willOpen) placeRowMenu(panel); else resetRowMenu(panel);
+      toggleRowMenu(btn, "oc-menu-panel", closeAllOcMenus);
       return;
     }
     closeAllOcMenus();
@@ -3765,11 +3770,11 @@ function openOcEdit(section, index) {
   document.getElementById("ocEditName").value = item.name;
   document.getElementById("ocEditQty").value = item.qty || 0;
   setModelSwitch(document.getElementById("ocEditModel"), item.model || "");
-  document.getElementById("ocEditOverlay").classList.add("open");
+  openModal("ocEditOverlay");
 }
 function closeOcEdit() {
   ocEditingTarget = null;
-  document.getElementById("ocEditOverlay").classList.remove("open");
+  closeModal("ocEditOverlay");
 }
 document.getElementById("ocEditCancel").addEventListener("click", closeOcEdit);
 document.getElementById("ocEditOverlay").addEventListener("click", (e) => {
@@ -3964,12 +3969,12 @@ function runOneCExport(mode) {
 }
 
 const ocExportOverlay = document.getElementById("ocExportOverlay");
-document.getElementById("ocExportCancel").addEventListener("click", () => ocExportOverlay.classList.remove("open"));
-ocExportOverlay.addEventListener("click", (e) => { if (e.target.id === "ocExportOverlay") ocExportOverlay.classList.remove("open"); });
-document.getElementById("ocExportAll").addEventListener("click", () => { ocExportOverlay.classList.remove("open"); runOneCExport("all"); });
-document.getElementById("ocExportDiff").addEventListener("click", () => { ocExportOverlay.classList.remove("open"); runOneCExport("diff"); });
-document.getElementById("ocExportPlus").addEventListener("click", () => { ocExportOverlay.classList.remove("open"); runOneCExport("plus"); });
-document.getElementById("ocExportMinus").addEventListener("click", () => { ocExportOverlay.classList.remove("open"); runOneCExport("minus"); });
+document.getElementById("ocExportCancel").addEventListener("click", () => closeModal(ocExportOverlay));
+ocExportOverlay.addEventListener("click", (e) => { if (e.target.id === "ocExportOverlay") closeModal(ocExportOverlay); });
+document.getElementById("ocExportAll").addEventListener("click", () => { closeModal(ocExportOverlay); runOneCExport("all"); });
+document.getElementById("ocExportDiff").addEventListener("click", () => { closeModal(ocExportOverlay); runOneCExport("diff"); });
+document.getElementById("ocExportPlus").addEventListener("click", () => { closeModal(ocExportOverlay); runOneCExport("plus"); });
+document.getElementById("ocExportMinus").addEventListener("click", () => { closeModal(ocExportOverlay); runOneCExport("minus"); });
 
 
 /* ==================== Навигация по совпадениям поиска ====================
@@ -4197,7 +4202,7 @@ document.getElementById("exportBtn").addEventListener("click", () => {
   if (document.getElementById("tabWarehouseBtn").classList.contains("active")) {
     runWarehouseExport();
   } else if (document.getElementById("tabOneCBtn").classList.contains("active")) {
-    ocExportOverlay.classList.add("open");
+    openModal(ocExportOverlay);
   } else {
     runConsumptionExport();
   }
@@ -4266,7 +4271,7 @@ function openOcToWh(section, index) {
   // названию (метка wind/ygw в тексте), чтобы не выбирать руками.
   setModelSwitch(document.getElementById("ocToWhModel"),
     item.model || detectModelFromName(item.name) || "");
-  document.getElementById("ocToWhOverlay").classList.add("open");
+  openModal("ocToWhOverlay");
   setTimeout(() => {
     const n = document.getElementById("ocToWhName");
     n.focus(); n.select();
@@ -4274,7 +4279,7 @@ function openOcToWh(section, index) {
 }
 function closeOcToWh() {
   ocToWhTarget = null;
-  document.getElementById("ocToWhOverlay").classList.remove("open");
+  closeModal("ocToWhOverlay");
 }
 document.getElementById("ocToWhCancel").addEventListener("click", closeOcToWh);
 document.getElementById("ocToWhOverlay").addEventListener("click", (e) => {
@@ -4737,16 +4742,31 @@ function applySyncPayload(payload) {
   }
 }
 
-async function githubGistRequest(method, url, token, body) {
-  const res = await fetch(url, {
-    method,
-    headers: {
-      "Authorization": "token " + token,
-      "Accept": "application/vnd.github+json",
-      "Content-Type": "application/json"
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+// Раньше при сетевой ошибке (телефон на секунду потерял связь) синхронизация
+// сразу сдавалась и показывала «Не удалось сохранить/загрузить». Теперь один
+// раз тихо повторяем запрос после паузы — но только саму сетевую ошибку
+// (fetch бросает TypeError, если вообще не достучался до сервера); реальный
+// ответ сервера с кодом ошибки (401/404/…) не ретраим — повтор всё равно не
+// поможет.
+async function githubGistRequest(method, url, token, body, _retried) {
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        "Authorization": "token " + token,
+        "Accept": "application/vnd.github+json",
+        "Content-Type": "application/json"
+      },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  } catch (networkErr) {
+    if (!_retried) {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      return githubGistRequest(method, url, token, body, true);
+    }
+    throw new Error("Нет соединения с сервером");
+  }
   if (!res.ok) {
     let msg = "Ошибка " + res.status;
     if (res.status === 401) msg = "Неверный токен";
@@ -4923,10 +4943,10 @@ function openSyncModal() {
   document.getElementById("syncTokenInput").value = token;
   document.getElementById("syncGistIdInput").value = gistId;
   document.getElementById("syncPrimaryToggle").checked = isPrimaryDevice();
-  document.getElementById("syncOverlay").classList.add("open");
+  openModal("syncOverlay");
 }
 function closeSyncModal() {
-  document.getElementById("syncOverlay").classList.remove("open");
+  closeModal("syncOverlay");
 }
 (function setupSyncBtnPress() {
   const btn = document.getElementById("syncBtn");
@@ -4992,13 +5012,13 @@ document.getElementById("syncSaveBtn").addEventListener("click", async () => {
 document.getElementById("syncPullBtn").addEventListener("click", () => pullFromGist());
 document.getElementById("syncHistoryBtn").addEventListener("click", () => {
   renderSyncHistory();
-  document.getElementById("syncHistoryOverlay").classList.add("open");
+  openModal("syncHistoryOverlay");
 });
 document.getElementById("syncHistoryClose").addEventListener("click", () => {
-  document.getElementById("syncHistoryOverlay").classList.remove("open");
+  closeModal("syncHistoryOverlay");
 });
 document.getElementById("syncHistoryOverlay").addEventListener("click", (e) => {
-  if (e.target.id === "syncHistoryOverlay") document.getElementById("syncHistoryOverlay").classList.remove("open");
+  if (e.target.id === "syncHistoryOverlay") closeModal("syncHistoryOverlay");
 });
 document.getElementById("syncForgetBtn").addEventListener("click", () => {
   if (!confirm("Отключить синхронизацию на этом устройстве? Токен и ID Gist будут забыты (сами данные в Gist останутся).")) return;
