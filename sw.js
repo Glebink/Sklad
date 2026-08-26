@@ -1,4 +1,4 @@
-const CACHE_NAME = "sklad-cache-v90";
+const CACHE_NAME = "sklad-cache-v91";
 const ASSETS = [
   "./index.html",
   "./style.css",
@@ -10,7 +10,14 @@ const ASSETS = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    // cache: "reload" — тянем файлы МИМО обычного HTTP-кэша браузера.
+    // GitHub Pages отдаёт их с max-age=600, и без этого свежая версия могла
+    // до 10 минут не доезжать: браузер отдавал бы копию из своего кэша.
+    // Заодно этот запрос обновляет и сам HTTP-кэш, поэтому после
+    // перезагрузки страницы новые файлы подхватятся сразу.
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(ASSETS.map((url) => new Request(url, { cache: "reload" })))
+    )
   );
   self.skipWaiting();
 });

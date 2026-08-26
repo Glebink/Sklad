@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v90";
+const APP_VERSION = "v91";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -5220,8 +5220,54 @@ document.addEventListener("click", (e) => {
    Работает только при открытии по https (или через GitHub Pages) —
    на file:// service worker браузером не регистрируется, но это не мешает
    основной работе программы, просто эта функция не активируется. */
+/* Автообновление. Раньше здесь была только регистрация: новые файлы
+   подхватывались лишь при полной перезагрузке страницы. На телефоне это
+   происходило само (система постоянно выгружает приложение из памяти), а на
+   рабочем столе окно PWA живёт неделями и не перезагружается — поэтому там
+   обновление "не доезжало". Теперь сами спрашиваем сервер, не появилась ли
+   новая версия, и перезагружаем страницу, когда она приехала. */
+const SW_UPDATE_CHECK_MS = 30 * 60 * 1000;   // раз в полчаса, пока окно открыто
+
+// Перезагружаем не мгновенно: если открыта модалка или пользователь что-то
+// набирает — ждём, иначе перезагрузка выдернула бы форму из-под рук.
+// Данные не теряются в любом случае (они пишутся в localStorage сразу), но
+// прерывать ввод всё равно незачем.
+function reloadForUpdateWhenSafe() {
+  const tryReload = () => {
+    if (document.querySelector(".modal-overlay.open") || isTypingNow()) {
+      setTimeout(tryReload, 3000);
+      return;
+    }
+    location.reload();
+  };
+  tryReload();
+}
+
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
+    // Смена управляющего service worker = приехала новая версия файлов.
+    // Исключение — самая первая установка: там controllerchange срабатывает
+    // от clients.claim(), хотя обновляться не с чего. Поэтому первый такой
+    // сигнал только запоминаем, а перезагружаемся начиная со второго.
+    let hasController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (!hasController) { hasController = true; return; }
+      if (reloading) return;
+      reloading = true;
+      reloadForUpdateWhenSafe();
+    });
+
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      const check = () => reg.update().catch(() => {});
+      check();                                   // сразу при запуске
+      setInterval(check, SW_UPDATE_CHECK_MS);    // и дальше периодически
+      // Возврат к приложению — самый частый момент, когда стоит проверить.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") check();
+      });
+      window.addEventListener("focus", check);
+    }).catch(() => {});
   });
 }
