@@ -790,8 +790,18 @@
     border-radius: 8px;
   }
   .sync-history-empty { padding: 14px 10px; font-size: 13px; color: #667; }
-  .sync-history-entry { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .sync-history-entry { position: relative; padding: 8px 22px 8px 10px; border-bottom: 1px solid var(--border); }
   .sync-history-entry:last-child { border-bottom: none; }
+  /* Маленькая точка в правом нижнем углу записи: зелёная — сохранилось,
+     красная — попытка не удалась (данные никуда не делись, ждут повтора). */
+  .sync-history-dot {
+    position: absolute;
+    right: 8px; bottom: 8px;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+  }
+  .sync-history-dot.ok { background: #16a34a; }
+  .sync-history-dot.err { background: var(--danger); }
   .sync-history-head {
     display: flex; justify-content: space-between; align-items: baseline;
     font-size: 13px; gap: 8px; margin-bottom: 4px;

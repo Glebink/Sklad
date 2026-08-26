@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v89";
+const APP_VERSION = "v90";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1168,6 +1168,21 @@ document.getElementById("deleteAllBtn").addEventListener("click", () => {
    были парами почти одинаковых функций — отличались только тем, в каком
    хранилище искать и что написать, если совпадений нет. Теперь один общий
    поиск и один общий рендер подсказок с этими двумя как параметрами. */
+// Разбивает текст на «слова» по любым не-буквенно-цифровым разделителям
+// (пробел, /, -, скобки и т.п.) — одинаково и для кириллицы, и для латиницы.
+function splitWords(text) {
+  return String(text).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+// Поиск «по слову»: каждое слово запроса должно быть НАЧАЛОМ какого-то
+// слова в названии — иначе короткий запрос («мк») находил бы буквы внутри
+// чужого слова («каМКа»). Код по-прежнему ищется подстрокой в любом месте —
+// так удобнее находить позицию по фрагменту кода.
+function nameMatchesQuery(name, query) {
+  const qWords = splitWords(query);
+  if (qWords.length === 0) return false;
+  const nWords = splitWords(name);
+  return qWords.every((qw) => nWords.some((nw) => nw.startsWith(qw)));
+}
 function searchStore(store, query) {
   const q = query.trim().toLowerCase();
   if (!q) return [];
@@ -1176,7 +1191,7 @@ function searchStore(store, query) {
     store[section].forEach((item) => {
       const name = (item.name || "").toLowerCase();
       const code = (item.code || "").toLowerCase();
-      if (name.includes(q) || code.includes(q)) {
+      if (nameMatchesQuery(name, q) || code.includes(q)) {
         results.push({ section, code: item.code || "", name: item.name, model: item.model || "" });
       }
     });
@@ -1746,6 +1761,12 @@ function whFilteredPairs(section) {
   return pairs.filter(({ item }) => (item.model || "") === whFilterModel);
 }
 function renderWarehouseSection(section) {
+  // Индекс код→позиция должен быть свежим ДО построения строк: иначе после
+  // сортировки/добавления/редактирования (которые меняют порядок или состав
+  // массива, но не всегда идут через renderWarehouseAll/renderOneCAll) тут
+  // читался бы старый индекс — переход между «Складом» и «1С» и колонки
+  // сравнения/остатка указывали бы не на ту позицию.
+  rebuildCrossIndexes();
   const tbody = document.getElementById("wh-body-" + section);
   const picked = selectedWH[section];
   tbody.innerHTML = whFilteredPairs(section).map(({ item, i }) => {
@@ -3577,6 +3598,10 @@ function ocFilteredPairs(section) {
   }
 }
 function renderOneCSection(section) {
+  // См. комментарий в renderWarehouseSection — тот же индекс код→позиция,
+  // без него переход «1С» → «Склад» и колонка сравнения указывали бы не
+  // на ту строку после сортировки/добавления/редактирования.
+  rebuildCrossIndexes();
   const tbody = document.getElementById("oc-body-" + section);
   const picked = selectedOC[section];
   const pairs = ocFilteredPairs(section);
@@ -4052,7 +4077,7 @@ function goToMatch(k, delta) {
 });
 
 const nameOrCode = (item, q) =>
-  item.name.toLowerCase().includes(q) || (item.code && item.code.toLowerCase().includes(q));
+  nameMatchesQuery(item.name, q) || (item.code && item.code.toLowerCase().includes(q));
 
 
 /* ==================== Закрепление общей шапки (дата/вкладки/⋮ + поиск) ====================
@@ -4452,16 +4477,12 @@ function markSyncedTo(updatedAt, dataSnapshot, kind) {
     localStorage.setItem(LOCAL_UPDATED_AT_KEY, String(t));
   } catch (e) {}
   if (dataSnapshot) {
-    const prev = loadSyncLastState();
-    if (!prev) {
-      // Не с чем сравнивать (первая синхронизация на этом устройстве) —
-      // не считаем диф (иначе туда попадёт вообще весь склад/учёт как
-      // "добавлено"), просто фиксируем сам факт.
-      addSyncHistoryEntry(kind || "push", ["Первая синхронизация — сохранено текущее состояние"]);
-    } else {
-      const lines = buildChangeSummary(prev, dataSnapshot);
-      if (lines.length > 0) addSyncHistoryEntry(kind || "push", lines);
-    }
+    const firstSync = !loadSyncLastState();
+    const lines = describeSyncAttempt(dataSnapshot);
+    // Диф (не первая синхронизация) пишем в историю только если реально
+    // что-то изменилось — иначе на пустом холостом сохранении появлялась бы
+    // запись без единой строки.
+    if (firstSync || lines.length > 0) addSyncHistoryEntry(kind || "push", lines, "ok");
     saveSyncLastState(dataSnapshot);
   }
   updateDirtyIndicator();
@@ -4546,11 +4567,32 @@ function saveSyncHistoryList() {
 }
 let syncHistory = loadSyncHistory();
 
-function addSyncHistoryEntry(kind, lines) {
-  syncHistory.unshift({ time: Date.now(), kind, lines });
+function addSyncHistoryEntry(kind, lines, status) {
+  syncHistory.unshift({ time: Date.now(), kind, lines, status: status || "ok" });
   if (syncHistory.length > SYNC_HISTORY_LIMIT) syncHistory.length = SYNC_HISTORY_LIMIT;
   saveSyncHistoryList();
   renderSyncHistory();
+}
+// Строки-описание того, что изменилось — сравнивает dataSnapshot с
+// последним ИЗВЕСТНО-СОХРАНЁННЫМ состоянием. Общая часть для успешной
+// записи в историю (markSyncedTo) и для неудачной попытки (logSyncFailure) —
+// в обоих случаях интересно "что именно не долетело/долетело".
+function describeSyncAttempt(dataSnapshot) {
+  const prev = loadSyncLastState();
+  if (!prev) return ["Первая синхронизация — сохранено текущее состояние"];
+  return buildChangeSummary(prev, dataSnapshot);
+}
+// Неудачная попытка отправки/загрузки — раньше просто показывала ошибку на
+// секунду в статус-строке и всё, при следующем открытии приложения не было
+// и следа, что попытка вообще была ("будто ничего и не было"). Теперь
+// каждая неудача — отдельная запись в истории с красной точкой; сами
+// данные при этом остаются "грязными" (isDirty() не сбрасывается), так что
+// следующая же попытка (новая правка, возврат в приложение, восстановление
+// сети — см. обработчики ниже) отправит их снова.
+function logSyncFailure(kind, dataSnapshot, errorMessage) {
+  const lines = dataSnapshot ? describeSyncAttempt(dataSnapshot) : [];
+  lines.push("Ошибка: " + errorMessage);
+  addSyncHistoryEntry(kind, lines, "failed");
 }
 // Объединяет историю, полученную с сервера (от другого устройства), с тем,
 // что уже есть локально. Записи считаются одинаковыми по паре время+тип —
@@ -4681,13 +4723,21 @@ function renderSyncHistory() {
     return;
   }
   box.innerHTML = syncHistory.map((entry) => {
-    const kindLabel = entry.kind === "pull" ? "⇩ загружено с сервера" : "⇧ сохранено на сервер";
+    const failed = entry.status === "failed";
+    const kindLabel = failed
+      ? (entry.kind === "pull" ? "⚠ не удалось загрузить" : "⚠ не удалось сохранить")
+      : (entry.kind === "pull" ? "⇩ загружено с сервера" : "⇧ сохранено на сервер");
     const body = entry.lines && entry.lines.length
       ? entry.lines.map((l) => escapeHtml(l)).join("\n")
       : "(первая запись — состояние на момент подключения синхронизации)";
+    // Маленькая точка в углу записи: зелёная — сохранилось, красная — не
+    // долетело (данные при этом никуда не делись, просто ждут следующей
+    // попытки — см. logSyncFailure).
+    const dotTitle = failed ? "Не удалось отправить" : "Сохранено";
     return "<div class=\"sync-history-entry\">"
       + "<div class=\"sync-history-head\"><b>" + formatHistoryTime(entry.time) + "</b><span>" + kindLabel + "</span></div>"
       + "<pre class=\"sync-history-body\">" + body + "</pre>"
+      + `<span class="sync-history-dot ${failed ? "err" : "ok"}" title="${dotTitle}"></span>`
       + "</div>";
   }).join("");
 }
@@ -4795,6 +4845,7 @@ async function pullFromGist(silent) {
     return true;
   } catch (e) {
     setSyncStatus("err", "Не удалось загрузить: " + e.message);
+    logSyncFailure("pull", null, e.message);
     return false;
   }
 }
@@ -4879,6 +4930,7 @@ async function pushToGistNow() {
     setSyncStatus("ok", "Синхронизировано: " + new Date().toLocaleTimeString().slice(0, 5));
   } catch (e) {
     setSyncStatus("err", "Не удалось сохранить: " + e.message);
+    logSyncFailure("push", payload, e.message);
   } finally {
     syncInFlight = false;
     // Пока мы отправляли этот запрос, пришло ещё одно изменение — досылаем
@@ -4914,14 +4966,24 @@ document.addEventListener("visibilitychange", () => {
     // Возврат в приложение: если не открыто ни одной модалки — тихо
     // подтягиваем актуальную версию с сервера. Подчинённое устройство делает
     // это всегда (даже если у него остались свои правки — сервер главнее),
-    // главное — только если у него самого нет неотправленных правок.
+    // главное — только если у него самого нет неотправленных правок. Если
+    // же неотправленные правки есть (например, прошлая попытка не удалась
+    // из-за сети) — пробуем отправить их снова, а не просто молчим до
+    // следующей правки.
     const modalOpen = document.querySelector(".modal-overlay.open");
     if (isSyncConfigured() && !syncInFlight && !modalOpen) {
       if (!isPrimaryDevice() || !isDirty()) pullFromGist(true);
+      else pushToGistNow();
     }
   }
 });
 window.addEventListener("pagehide", flushSyncNow);
+// Браузер сообщает о восстановлении связи (телефон был оффлайн) — если
+// остались неотправленные правки, пробуем сразу же, не дожидаясь новой
+// правки или следующего сворачивания вкладки.
+window.addEventListener("online", () => {
+  if (isSyncConfigured() && isDirty() && !syncInFlight) pushToGistNow();
+});
 
 // Подчинённое устройство само периодически проверяет сервер, пока страница
 // открыта — чтобы обновления с главного устройства подтягивались без
