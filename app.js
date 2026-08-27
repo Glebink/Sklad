@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v94";
+const APP_VERSION = "v95";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -4793,23 +4793,27 @@ function renderSyncHistory() {
     return;
   }
   box.innerHTML = syncHistory.map((entry) => {
+    const isLocal = entry.kind === "local";
     const failed = entry.status === "failed";
     const skipped = entry.status === "skipped";
-    const kindLabel = failed
-      ? (entry.kind === "pull" ? "⚠ не удалось загрузить" : "⚠ не удалось сохранить")
-      : skipped
-        ? "⊘ пропущено (данные защищены)"
-        : (entry.kind === "pull" ? "⇩ загружено с сервера" : "⇧ сохранено на сервер");
+    const kindLabel = isLocal
+      ? "✎ сохранено на устройстве"
+      : failed
+        ? (entry.kind === "pull" ? "⚠ не удалось загрузить" : "⚠ не удалось сохранить")
+        : skipped
+          ? "⊘ пропущено (данные защищены)"
+          : (entry.kind === "pull" ? "⇩ загружено с сервера" : "⇧ сохранено на сервер");
     const body = entry.lines && entry.lines.length
       ? entry.lines.map((l) => escapeHtml(l)).join("\n")
       : "(первая запись — состояние на момент подключения синхронизации)";
     // Маленькая точка в углу записи: зелёная — сохранилось, красная — не
     // долетело (данные при этом никуда не делись, просто ждут следующей
     // попытки — см. logSyncFailure).
-    const dotTitle = failed ? "Не удалось отправить"
+    const dotTitle = isLocal ? "Сохранено на этом устройстве"
+                   : failed ? "Не удалось отправить"
                    : skipped ? "Устаревшие данные с сервера не применены"
                    : "Сохранено";
-    const dotClass = failed ? "err" : skipped ? "warn" : "ok";
+    const dotClass = isLocal ? "local" : failed ? "err" : skipped ? "warn" : "ok";
     return "<div class=\"sync-history-entry\">"
       + "<div class=\"sync-history-head\"><b>" + formatHistoryTime(entry.time) + "</b><span>" + kindLabel + "</span></div>"
       + "<pre class=\"sync-history-body\">" + body + "</pre>"
@@ -4847,6 +4851,79 @@ function shouldApplyRemote(remotePayload) {
              reason: "сервер вернул версию старше той, что уже сохранена здесь — похоже на устаревший ответ" };
   }
   return { apply: true, same: false, reason: "" };
+}
+
+/* ==================== Журнал локальных сохранений ====================
+   В историю попадают не только обмены с сервером, но и обычная работа на
+   устройстве: добавили позицию, изменили количество, поправили склад/1С.
+   Записи ГРУППИРУЮТСЯ: всё, что сделано в пределах минуты, показывается
+   одной записью и пересчитывается целиком от состояния на начало группы —
+   поэтому три тапа «+» подряд дают «20 → 23», а не три отдельные строки.
+
+   Как считается разница. Держим два снимка:
+     • базовый (baseline) — состояние на НАЧАЛО текущей группы, лежит в
+       localStorage, чтобы группа пережила перезагрузку приложения;
+     • последний (localLogLastState) — состояние на момент прошлой записи,
+       живёт в памяти. Когда минута истекает и открывается новая группа,
+       именно он становится её базовым: на конец прошлой группы состояние
+       было ровно таким.
+   Сортировка сюда не попадает — она сохраняется мимо scheduleSync(). */
+const LOCAL_LOG_GROUP_MS = 60000;      // окно группировки — одна минута
+const LOCAL_LOG_DEBOUNCE_MS = 1200;    // подряд идущие тапы сводим в одну запись
+const LOCAL_LOG_BASELINE_KEY = "potreblenie_local_log_baseline_v1";
+let localLogTimer = null;
+let localLogLastState = null;
+
+function snapshotForLog() {
+  return JSON.parse(JSON.stringify({ dataByDate, warehouse, onec }));
+}
+function loadLocalLogBaseline() {
+  try {
+    const raw = localStorage.getItem(LOCAL_LOG_BASELINE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+function saveLocalLogBaseline(snap) {
+  try { localStorage.setItem(LOCAL_LOG_BASELINE_KEY, JSON.stringify(snap)); } catch (e) {}
+}
+
+function logLocalChange() {
+  if (localLogTimer) clearTimeout(localLogTimer);
+  localLogTimer = setTimeout(flushLocalLog, LOCAL_LOG_DEBOUNCE_MS);
+}
+
+function flushLocalLog() {
+  localLogTimer = null;
+  const current = snapshotForLog();
+  // Первый вызов до готовности приложения — просто запоминаем точку отсчёта.
+  if (!localLogLastState) { localLogLastState = current; return; }
+
+  const now = Date.now();
+  const top = syncHistory[0];
+  const inGroup = top && top.kind === "local"
+                  && (now - (top.groupStart || top.time)) < LOCAL_LOG_GROUP_MS;
+
+  let baseline;
+  if (inGroup) {
+    baseline = loadLocalLogBaseline() || localLogLastState;
+  } else {
+    baseline = localLogLastState;      // состояние на конец предыдущей группы
+    saveLocalLogBaseline(baseline);
+  }
+
+  const lines = buildChangeSummary(baseline, current);
+  localLogLastState = current;
+  if (lines.length === 0) return;      // менялось что-то, чего не показываем
+
+  if (inGroup) {
+    top.lines = lines;                 // пересчитали группу целиком
+    top.time = now;
+  } else {
+    syncHistory.unshift({ time: now, groupStart: now, kind: "local", lines, status: "local" });
+    if (syncHistory.length > SYNC_HISTORY_LIMIT) syncHistory.length = SYNC_HISTORY_LIMIT;
+  }
+  saveSyncHistoryList();
+  renderSyncHistory();
 }
 
 function applySyncPayload(payload) {
@@ -5075,6 +5152,7 @@ async function pushToGistNow() {
 
 function scheduleSync() {
   if (applyingRemote) return;          // это мы сами только что применили данные с сервера
+  logLocalChange();                    // пишем правку в историю (работает и без синхронизации)
   markLocalChange();                   // запоминаем: на этом устройстве есть свежая правка
   if (!isSyncConfigured()) return;
   if (syncTimer) clearTimeout(syncTimer);
@@ -5295,6 +5373,10 @@ renderWarehouseAll();
 renderOneCAll();
 
 updateDirtyIndicator();
+// Точка отсчёта для журнала локальных правок. Ставится ПОСЛЕ загрузки данных
+// и автопростановки моделей — иначе первое изменение сравнивать было бы не с
+// чем, а сама миграция попала бы в историю как правка пользователя.
+localLogLastState = snapshotForLog();
 // Если при запуске автопростановка модели что-то изменила (например, впервые
 // после обновления приложения) — помечаем это как локальную правку, чтобы
 // очищенные названия и проставленные модели ушли на сервер, а не остались
