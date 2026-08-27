@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v91";
+const APP_VERSION = "v92";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -741,11 +741,28 @@ function findChange(beforeLists, afterLists, beforeMap, afterMap, keyFn) {
   return null;
 }
 
+/* Находит строку таблицы по её индексу в МАССИВЕ данных.
+   Раньше по всему файлу писали tbody.querySelectorAll("tr")[index], то есть
+   индекс в данных использовали как номер строки на экране. Пока фильтров не
+   было, это совпадало. Но «Склад» фильтруется по модели, а «1С» — по
+   разделу/остатку, и тогда на экране остаётся лишь подмножество строк:
+   обращение по номеру попадало в чужую позицию — отсюда переходы «на
+   случайную строку». Теперь у строк этих таблиц есть data-index с настоящим
+   индексом, и ищем именно по нему.
+   Возвращает null, если строка сейчас скрыта фильтром. */
+function rowByDataIndex(tbodyId, index) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return null;
+  if (tbody.querySelector("tr[data-index]")) {
+    return tbody.querySelector(`tr[data-index="${index}"]`);
+  }
+  // «Учёт» рисуется без фильтра — там номер строки и индекс совпадают.
+  return tbody.querySelectorAll("tr")[index] || null;
+}
+
 /* Подсвечивает строку и прокручивает к ней */
 function highlightAt(bodyPrefix, section, index) {
-  const tbody = document.getElementById(bodyPrefix + section);
-  if (!tbody) return;
-  const tr = tbody.querySelectorAll("tr")[index];
+  const tr = rowByDataIndex(bodyPrefix + section, index);
   if (tr) highlightRows([tr]);
 }
 
@@ -1264,8 +1281,7 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   );
   if (dupIndex !== -1) {
     alert("Такая позиция уже есть в этом списке.");
-    const tbody = document.getElementById("body-" + section);
-    flashRow(tbody.querySelectorAll("tr")[dupIndex]);
+    flashRow(rowByDataIndex("body-" + section, dupIndex));
     return;
   }
   const qtyInput = document.getElementById("newItemQty");
@@ -1772,7 +1788,7 @@ function renderWarehouseSection(section) {
   tbody.innerHTML = whFilteredPairs(section).map(({ item, i }) => {
     const key = countKey(section, item);
     const ocInfo = oneCInfoFor(item.code);
-    return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
+    return `<tr data-key="${escapeHtml(key)}" data-index="${i}"${picked.has(key) ? ' class="row-picked"' : ""}>
       <td class="num">${i + 1}</td>
       <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}</td>
       <td class="name"><div class="main-name">${escapeHtml(item.name)}</div>${ocInfo ? altNameHtml(item.code, ocInfo, true) : ""}</td>
@@ -1939,9 +1955,14 @@ function handleWarehouseClick(e) {
   }
   const link = e.target.closest(".alt-link");
   if (link) {
+    // Индекс берём из самой строки, а НЕ из её позиции среди отрисованных:
+    // при включённом фильтре по модели на экране лишь часть склада, и позиция
+    // указывала бы на чужую позицию массива.
     const tr = link.closest("tr");
-    const index = Array.prototype.indexOf.call(tr.parentNode.children, tr);
-    jumpToOneC(warehouse[section][index].code, section, index);
+    const index = parseInt(tr.dataset.index, 10);
+    const item = warehouse[section][index];
+    if (!item) return;
+    jumpToOneC(item.code, section, index);
     return;
   }
   const nameTd = e.target.closest("td.name");
@@ -3531,10 +3552,29 @@ backBtn.addEventListener("click", (e) => {
   hideBackBtn();
   switchTab(tab);
   setTimeout(() => {
-    const tbody = document.getElementById(bodyPrefix[tab] + section);
-    highlightRows([tbody.querySelectorAll("tr")[index]]);
+    const tab2 = tab === "warehouse" ? "wh" : "oc";
+    highlightRows([revealRow(tab2, section, index)]);
   }, 60);
 });
+
+/* Показывает строку, даже если её прячет фильтр вкладки: тогда фильтр
+   сбрасывается на «все» и таблица перерисовывается. Иначе переход по ссылке
+   выглядел бы как «ничего не произошло» — позиция есть, но она отфильтрована. */
+function revealRow(tab, section, index) {
+  const tbodyId = (tab === "wh" ? "wh-body-" : "oc-body-") + section;
+  let tr = rowByDataIndex(tbodyId, index);
+  if (tr) return tr;
+  if (tab === "wh") {
+    whFilterModel = "all";
+    saveWhFilter();
+    renderWarehouseAll();
+  } else {
+    ocFilter.mode = "all";
+    saveOcFilter();
+    renderOneCAll();
+  }
+  return rowByDataIndex(tbodyId, index);
+}
 
 /* Переход «Склад» -> 1C с подсветкой */
 function jumpToOneC(code, fromSection, fromIndex) {
@@ -3543,8 +3583,7 @@ function jumpToOneC(code, fromSection, fromIndex) {
   switchTab("onec");
   showBackBtn("warehouse", fromSection, fromIndex, "onec");
   setTimeout(() => {
-    highlightRows(matches.map((m) =>
-      document.getElementById("oc-body-" + m.section).querySelectorAll("tr")[m.index]));
+    highlightRows(matches.map((m) => revealRow("oc", m.section, m.index)));
   }, 60);
 }
 
@@ -3555,8 +3594,7 @@ function jumpToWarehouse(code, fromSection, fromIndex) {
   switchTab("warehouse");
   showBackBtn("onec", fromSection, fromIndex, "warehouse");
   setTimeout(() => {
-    const tbody = document.getElementById("wh-body-" + info.section);
-    highlightRows([tbody.querySelectorAll("tr")[info.index]]);
+    highlightRows([revealRow("wh", info.section, info.index)]);
   }, 60);
 }
 
@@ -3610,7 +3648,7 @@ function renderOneCSection(section) {
     const key = section + "::" + item.code + "::" + item.name;
     const whInfo = warehouseInfoFor(item.code);
     const diff = whInfo ? whInfo.qty - (item.qty || 0) : null;
-    return `<tr data-key="${escapeHtml(key)}"${picked.has(key) ? ' class="row-picked"' : ""}>
+    return `<tr data-key="${escapeHtml(key)}" data-index="${i}"${picked.has(key) ? ' class="row-picked"' : ""}>
       <td class="code wh-code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}${item.model ? `<span class="wh-model-badge">${escapeHtml(item.model)}</span>` : ""}</td>
       <td class="name">
         <div class="main-name">${escapeHtml(item.name)}</div>
@@ -3734,9 +3772,13 @@ function handleOneCClick(e) {
   }
   const link = e.target.closest(".alt-link");
   if (link) {
+    // См. комментарий в handleWarehouseClick: в «1С» фильтр по разделу/остатку
+    // точно так же оставляет на экране лишь часть списка.
     const tr = link.closest("tr");
-    const index = Array.prototype.indexOf.call(tr.parentNode.children, tr);
-    jumpToWarehouse(onec[section][index].code, section, index);
+    const index = parseInt(tr.dataset.index, 10);
+    const item = onec[section][index];
+    if (!item) return;
+    jumpToWarehouse(item.code, section, index);
     return;
   }
   const nameTd = e.target.closest("td.name");
@@ -3855,8 +3897,9 @@ document.getElementById("ocAddBtn").addEventListener("click", () => {
     const dupIndex = onec[section].findIndex((it) => it.code === code);
     if (dupIndex !== -1) {
       alert("Позиция с таким кодом уже есть в этом разделе 1C.");
-      const tbody = document.getElementById("oc-body-" + section);
-      flashRow(tbody.querySelectorAll("tr")[dupIndex]);
+      // Дубль может быть скрыт фильтром — тогда показываем его, иначе
+      // сообщение «позиция уже есть» указывало бы в пустоту.
+      flashRow(revealRow("oc", section, dupIndex));
       return;
     }
   }
@@ -4337,8 +4380,7 @@ document.getElementById("ocToWhSave").addEventListener("click", () => {
   closeOcToWh();
 
   // подсветим строку 1C — у неё появилась зелёная связь со складом
-  const tbody = document.getElementById("oc-body-" + section);
-  flashRow(tbody.querySelectorAll("tr")[index]);
+  flashRow(revealRow("oc", section, index));
 });
 document.getElementById("ocToWhName").addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("ocToWhSave").click();
