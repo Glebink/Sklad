@@ -802,6 +802,8 @@
   }
   .sync-history-dot.ok { background: #16a34a; }
   .sync-history-dot.err { background: var(--danger); }
+  /* Янтарная — данные с сервера были устаревшими и намеренно не применены */
+  .sync-history-dot.warn { background: #f59e0b; }
   .sync-history-head {
     display: flex; justify-content: space-between; align-items: baseline;
     font-size: 13px; gap: 8px; margin-bottom: 4px;

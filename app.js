@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v93";
+const APP_VERSION = "v94";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -4794,22 +4794,59 @@ function renderSyncHistory() {
   }
   box.innerHTML = syncHistory.map((entry) => {
     const failed = entry.status === "failed";
+    const skipped = entry.status === "skipped";
     const kindLabel = failed
       ? (entry.kind === "pull" ? "⚠ не удалось загрузить" : "⚠ не удалось сохранить")
-      : (entry.kind === "pull" ? "⇩ загружено с сервера" : "⇧ сохранено на сервер");
+      : skipped
+        ? "⊘ пропущено (данные защищены)"
+        : (entry.kind === "pull" ? "⇩ загружено с сервера" : "⇧ сохранено на сервер");
     const body = entry.lines && entry.lines.length
       ? entry.lines.map((l) => escapeHtml(l)).join("\n")
       : "(первая запись — состояние на момент подключения синхронизации)";
     // Маленькая точка в углу записи: зелёная — сохранилось, красная — не
     // долетело (данные при этом никуда не делись, просто ждут следующей
     // попытки — см. logSyncFailure).
-    const dotTitle = failed ? "Не удалось отправить" : "Сохранено";
+    const dotTitle = failed ? "Не удалось отправить"
+                   : skipped ? "Устаревшие данные с сервера не применены"
+                   : "Сохранено";
+    const dotClass = failed ? "err" : skipped ? "warn" : "ok";
     return "<div class=\"sync-history-entry\">"
       + "<div class=\"sync-history-head\"><b>" + formatHistoryTime(entry.time) + "</b><span>" + kindLabel + "</span></div>"
       + "<pre class=\"sync-history-body\">" + body + "</pre>"
-      + `<span class="sync-history-dot ${failed ? "err" : "ok"}" title="${dotTitle}"></span>`
+      + `<span class="sync-history-dot ${dotClass}" title="${dotTitle}"></span>`
       + "</div>";
   }).join("");
+}
+
+/* ==================== Сверка версий перед применением данных с сервера ====
+   ПРИЧИНА ПРОПАЖ. Раньше присланные сервером данные применялись безусловно.
+   GitHub Gist может ответить на чтение сразу после записи ещё СТАРЫМ
+   содержимым (задержка репликации между репликами API). Тогда только что
+   добавленная позиция затиралась версией, где её ещё нет:
+       ⇧ сохранено на сервер   + Рамка номера задняя
+       ⇩ загружено с сервера   − Рамка номера задняя
+   Опорная точка — updatedAt последней версии, к которой мы точно
+   синхронизировались (её мы либо сами отправили, либо приняли с сервера).
+   Если сервер отдаёт updatedAt СТАРШЕ этой отметки — это заведомо
+   устаревший ответ, и применять его нельзя. */
+function shouldApplyRemote(remotePayload) {
+  if (!remotePayload || typeof remotePayload !== "object") {
+    return { apply: false, same: false, reason: "сервер не прислал данные приложения" };
+  }
+  const remoteAt = Number(remotePayload.updatedAt) || 0;
+  const lastSynced = getLastSyncedAt();
+  if (!lastSynced) return { apply: true, same: false, reason: "" };   // ещё ни разу не синхронизировались
+  if (!remoteAt) {
+    return { apply: false, same: false, reason: "у данных с сервера нет отметки времени" };
+  }
+  if (remoteAt === lastSynced) {
+    return { apply: false, same: true, reason: "на сервере та же версия, что уже есть здесь" };
+  }
+  if (remoteAt < lastSynced) {
+    return { apply: false, same: false,
+             reason: "сервер вернул версию старше той, что уже сохранена здесь — похоже на устаревший ответ" };
+  }
+  return { apply: true, same: false, reason: "" };
 }
 
 function applySyncPayload(payload) {
@@ -4896,7 +4933,7 @@ async function githubGistRequest(method, url, token, body, _retried) {
   return res.json();
 }
 
-async function pullFromGist(silent) {
+async function pullFromGist(silent, force) {
   // Пока синхронизация заморожена — никаких загрузок с сервера. Именно эта
   // операция и затирала свежие локальные данные (см. SYNC_FROZEN_KEY).
   if (isSyncFrozen()) return false;
@@ -4912,6 +4949,18 @@ async function pullFromGist(silent) {
       return false;
     }
     const payload = JSON.parse(file.content);
+    const verdict = shouldApplyRemote(payload);
+    if (!verdict.apply && !force) {
+      if (verdict.same) {
+        setSyncStatus("ok", "Уже актуально: " + new Date().toLocaleTimeString().slice(0, 5));
+      } else {
+        // Локальные данные НЕ трогаем. Раньше именно здесь они и терялись.
+        setSyncStatus("ok", "Данные с сервера пропущены — " + verdict.reason);
+        addSyncHistoryEntry("pull", ["Загрузка пропущена: " + verdict.reason,
+                                     "Локальные данные оставлены без изменений"], "skipped");
+      }
+      return false;
+    }
     applySyncPayload(payload);
     markSyncedTo(payload.updatedAt, payload, "pull");
     setSyncStatus("ok", "Синхронизировано: " + new Date().toLocaleTimeString().slice(0, 5));
@@ -4967,8 +5016,16 @@ async function pushToGistNow() {
     const remotePayload = (remoteFile && remoteFile.content) ? JSON.parse(remoteFile.content) : null;
     const lastSynced = getLastSyncedAt();
     const remoteChangedSinceUs = remotePayload && remotePayload.updatedAt && remotePayload.updatedAt !== lastSynced;
-
-    if (remoteChangedSinceUs) {
+    // Проверка перед отправкой тоже читает сервер — и точно так же может
+    // получить устаревший ответ. Без сверки подчинённое устройство ниже
+    // приняло бы эту старую копию и затёрло свежие локальные данные.
+    const verdict = shouldApplyRemote(remotePayload);
+    if (remoteChangedSinceUs && !verdict.apply) {
+      addSyncHistoryEntry("pull", ["Ответ сервера пропущен: " + verdict.reason,
+                                   "Отправляем локальную версию"], "skipped");
+    }
+    // «Сервер действительно новее» — только если сверка это подтвердила.
+    if (remoteChangedSinceUs && verdict.apply) {
       if (isPrimaryDevice()) {
         // Главное устройство: не спрашиваем — наша версия побеждает всегда.
         await githubGistRequest("PATCH", "https://api.github.com/gists/" + gistId, token, {
@@ -5170,7 +5227,27 @@ document.getElementById("syncSaveBtn").addEventListener("click", async () => {
   setupSecondaryPolling();
   updateGuestModeUI();
 });
-document.getElementById("syncPullBtn").addEventListener("click", () => pullFromGist());
+/* Ручная загрузка. Если автоматика отказалась применять версию с сервера
+   (она старше локальной), кнопка честно об этом спрашивает — на случай,
+   когда сервер намеренно откатили и загрузить старую версию нужно. */
+document.getElementById("syncPullBtn").addEventListener("click", async () => {
+  const ok = await pullFromGist(false);
+  if (ok) return;
+  const { token, gistId } = getSyncConfig();
+  if (!token || !gistId || isSyncFrozen()) return;
+  let remote = null;
+  try {
+    const data = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
+    const file = data.files && data.files[SYNC_FILENAME];
+    remote = (file && file.content) ? JSON.parse(file.content) : null;
+  } catch (e) { return; }
+  const verdict = shouldApplyRemote(remote);
+  if (verdict.apply || verdict.same) return;
+  if (confirm("Версия на сервере " + verdict.reason
+      + ".\n\nВсё равно загрузить её и ЗАМЕНИТЬ данные на этом устройстве?")) {
+    pullFromGist(false, true);
+  }
+});
 document.getElementById("syncHistoryBtn").addEventListener("click", () => {
   renderSyncHistory();
   openModal("syncHistoryOverlay");
