@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v92";
+const APP_VERSION = "v93";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -4435,6 +4435,29 @@ const SYNC_GIST_ID_KEY = "potreblenie_sync_gist_id_v1";
 // подтверждения; "подчинённое" при конфликте всегда молча берёт версию с
 // сервера и вдобавок сам периодически проверяет сервер, пока открыто.
 const SYNC_PRIMARY_KEY = "potreblenie_sync_primary_v1";
+/* ==================== Заморозка синхронизации ====================
+   Синхронизация с сервером приостановлена: приложение работает полностью
+   локально, и НИЧЕГО не может перетереть то, что вы ввели.
+
+   Зачем: загрузка с сервера (pullFromGist) применяла присланные данные
+   безусловно, без сверки времени изменения. GitHub Gist умеет ответить на
+   чтение сразу после записи ещё СТАРЫМ содержимым (задержка репликации), и
+   тогда только что добавленная позиция затиралась версией, где её ещё нет.
+   В истории сохранений это выглядело как «+ позиция» (отправлено), а следом
+   «− позиция» (загружено с сервера) — вещь пропадала «будто и не добавлял».
+
+   Пока флаг включён, автоматических отправок и загрузок нет вообще: ни по
+   таймеру, ни при возврате в приложение, ни при появлении сети. Локальные
+   данные как писались в localStorage сразу при каждом изменении, так и
+   пишутся — на это заморозка не влияет.
+
+   Снимается переключателем в настройках синхронизации (долгое нажатие на
+   облачко). По умолчанию — заморожено. */
+const SYNC_FROZEN_KEY = "potreblenie_sync_frozen_v1";
+function isSyncFrozen() { return localStorage.getItem(SYNC_FROZEN_KEY) !== "0"; }
+function setSyncFrozen(frozen) {
+  try { localStorage.setItem(SYNC_FROZEN_KEY, frozen ? "1" : "0"); } catch (e) {}
+}
 function isPrimaryDevice() { return localStorage.getItem(SYNC_PRIMARY_KEY) === "1"; }
 const SYNC_SETTINGS_PW_KEY = "potreblenie_sync_settings_pw_v1";
 function getSyncPassword() { return localStorage.getItem(SYNC_SETTINGS_PW_KEY) || ""; }
@@ -4546,6 +4569,11 @@ function getSyncConfig() {
   };
 }
 function isSyncConfigured() {
+  // Заморожено — ведём себя так, будто синхронизация не настроена: это разом
+  // отключает автоотправку (scheduleSync), автозагрузку при возврате в
+  // приложение, опрос сервера подчинённым устройством, отправку по появлению
+  // сети и гостевой режим. Токен и ID Gist при этом сохраняются.
+  if (isSyncFrozen()) return false;
   return !!getSyncConfig().token;
 }
 
@@ -4553,7 +4581,7 @@ function setSyncStatus(state, text) {
   const btn = document.getElementById("syncBtn");
   const line = document.getElementById("syncStatusLine");
   btn.classList.remove("err", "syncing");
-  const icons = { idle: "⚙", syncing: "⏳", ok: "☁", err: "⚠", off: "⚙" };
+  const icons = { idle: "⚙", syncing: "⏳", ok: "☁", err: "⚠", off: "⚙", frozen: "⏸" };
   if (state === "syncing") btn.classList.add("syncing");
   if (state === "err") btn.classList.add("err");
   btn.textContent = icons[state] || "⚙";
@@ -4869,6 +4897,9 @@ async function githubGistRequest(method, url, token, body, _retried) {
 }
 
 async function pullFromGist(silent) {
+  // Пока синхронизация заморожена — никаких загрузок с сервера. Именно эта
+  // операция и затирала свежие локальные данные (см. SYNC_FROZEN_KEY).
+  if (isSyncFrozen()) return false;
   const { token, gistId } = getSyncConfig();
   if (!token || !gistId) return false;
   if (!silent) setSyncStatus("syncing", "Загрузка с сервера…");
@@ -4897,6 +4928,7 @@ async function pullFromGist(silent) {
 // с момента, когда мы в последний раз читали сервер. Если сохранил — не
 // затираем её молча, а показываем пользователю модалку с выбором.
 async function pushToGistNow() {
+  if (isSyncFrozen()) return;
   const { token, gistId } = getSyncConfig();
   if (!token) return;
   if (syncInFlight) {
@@ -5047,6 +5079,8 @@ function openSyncModal() {
   document.getElementById("syncTokenInput").value = token;
   document.getElementById("syncGistIdInput").value = gistId;
   document.getElementById("syncPrimaryToggle").checked = isPrimaryDevice();
+  const frozenToggle = document.getElementById("syncFrozenToggle");
+  if (frozenToggle) frozenToggle.checked = isSyncFrozen();
   openModal("syncOverlay");
 }
 function closeSyncModal() {
@@ -5089,6 +5123,29 @@ document.getElementById("syncPrimaryToggle").addEventListener("change", (e) => {
   setupSecondaryPolling();
   updateGuestModeUI();
 });
+/* Переключатель «работать только на этом устройстве». Снимать заморозку
+   стоит, только когда действительно нужны два устройства: сейчас загрузка с
+   сервера применяется без сверки времени и может затереть свежие локальные
+   правки (см. комментарий у SYNC_FROZEN_KEY). */
+{
+  const frozenToggle = document.getElementById("syncFrozenToggle");
+  if (frozenToggle) {
+    frozenToggle.addEventListener("change", (e) => {
+      setSyncFrozen(e.target.checked);
+      setupSecondaryPolling();
+      updateGuestModeUI();
+      updateDirtyIndicator();
+      if (e.target.checked) {
+        setSyncStatus("frozen", "Синхронизация приостановлена — приложение работает только на этом устройстве. "
+          + "Всё, что вы вводите, сохраняется сразу и никуда не пропадёт.");
+      } else if (isSyncConfigured()) {
+        setSyncStatus("idle", "Синхронизация включена. Данные с сервера снова могут заменять локальные.");
+      } else {
+        setSyncStatus("off", "Не настроено. Укажите токен, чтобы включить синхронизацию.");
+      }
+    });
+  }
+}
 document.getElementById("syncSaveBtn").addEventListener("click", async () => {
   const token = document.getElementById("syncTokenInput").value.trim();
   const gistId = document.getElementById("syncGistIdInput").value.trim();
@@ -5166,7 +5223,10 @@ updateDirtyIndicator();
 // очищенные названия и проставленные модели ушли на сервер, а не остались
 // только на этом устройстве.
 if (migrationTouchedAtStartup && isPrimaryDevice()) markLocalChange();
-if (isSyncConfigured()) {
+if (isSyncFrozen()) {
+  setSyncStatus("frozen", "Синхронизация приостановлена — приложение работает только на этом устройстве. "
+    + "Всё, что вы вводите, сохраняется сразу и никуда не пропадёт.");
+} else if (isSyncConfigured()) {
   if (!isPrimaryDevice()) {
     // Подчинённое устройство: сервер всегда главнее — просто подтягиваем.
     setSyncStatus("syncing", "Загрузка с сервера…");
