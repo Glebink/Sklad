@@ -520,7 +520,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Раньше был сплошной счётчик (…v98, v99, v100), с версии v1.0 — этот
 // формат. Версия нигде не сравнивается как число, только показывается и
 // пишется в резервную копию, так что смена формата ничего не ломает.
-const APP_VERSION = "v1.2";
+const APP_VERSION = "v1.3";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -4302,6 +4302,53 @@ window.addEventListener("resize", syncStickyTopHeight);
 // поиска и т.д. — здесь она просто пересчитывает высоту распорки.
 function updateStickySearch() { syncStickyTopHeight(); }
 syncStickyTopHeight();
+
+/* iOS: после резкой прокрутки (тап по верхней кромке экрана, рывок пальцем
+   от края, инерционный «бросок» списка) WebKit оставляет у position:fixed
+   старую область нажатий. Визуально шапка наверху, а тапы попадают туда, где
+   она была ДО прокрутки — то есть «мимо, ниже по экрану». Само чинится, только
+   если оттянуть страницу вниз и отпустить.
+
+   Лечится принудительным пересчётом раскладки самой шапки: на миг убираем
+   position:fixed, синхронно читаем размер (это и заставляет браузер пересчитать
+   геометрию и область нажатий) и возвращаем обратно. Всё внутри одной задачи —
+   между двумя состояниями кадр не рисуется, поэтому шапка не дёргается. */
+function recalibrateStickyTop() {
+  if (!stickyTopEl) return;
+  const prev = stickyTopEl.style.position;
+  stickyTopEl.style.position = "static";
+  void stickyTopEl.offsetHeight;          // синхронная раскладка — без неё браузер склеит обе строки
+  stickyTopEl.style.position = prev;      // пусто = обратно к fixed из CSS
+  void stickyTopEl.offsetHeight;
+  syncStickyTopHeight();
+}
+
+// Дёргаем не на каждый пиксель прокрутки, а когда она остановилась, и только
+// если позиция действительно менялась — лишний пересчёт раскладки на длинном
+// списке стоит дорого.
+let stickyCalibTimer = null;
+let stickyCalibAtY = -1;
+function scheduleStickyRecalibrate() {
+  // Пока курсор в поле, шапку не трогаем: на iOS снятие position:fixed у
+  // предка сфокусированного поля заставляет браузер «догонять» его прокруткой.
+  if (isTypingNow()) return;
+  if (Math.round(window.pageYOffset) === stickyCalibAtY) return;
+  clearTimeout(stickyCalibTimer);
+  stickyCalibTimer = setTimeout(() => {
+    stickyCalibAtY = Math.round(window.pageYOffset);
+    recalibrateStickyTop();
+  }, 150);
+}
+window.addEventListener("scroll", scheduleStickyRecalibrate, { passive: true });
+window.addEventListener("touchend", scheduleStickyRecalibrate, { passive: true });
+window.addEventListener("pageshow", () => { stickyCalibAtY = -1; scheduleStickyRecalibrate(); });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { stickyCalibAtY = -1; scheduleStickyRecalibrate(); }
+});
+if (window.visualViewport) {
+  // Клавиатура и смена масштаба тоже сдвигают видимую область.
+  window.visualViewport.addEventListener("resize", () => { stickyCalibAtY = -1; scheduleStickyRecalibrate(); });
+}
 
 
 /* ==================== Отмена / повтор на «Складе» ==================== */
