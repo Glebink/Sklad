@@ -597,15 +597,30 @@
   </div>
 </div>
 
+<!-- Модалка: ручной обмен с сервером (короткий тап по облачку) -->
+<div class="modal-overlay" id="manualSyncOverlay">
+  <div class="modal-box">
+    <p class="modal-title">Обмен с сервером</p>
+    <div class="sync-status-line" id="manualSyncRole"></div>
+    <div class="sync-status-line" id="manualSyncInfo"></div>
+    <div class="modal-actions stack">
+      <button class="confirm-yes accent full-w" id="manualPushBtn">⇧ Выгрузить на сервер</button>
+      <button class="confirm-no bg-neutral full-w" id="manualPullBtn">⇩ Загрузить с сервера</button>
+      <button class="confirm-no full-w" id="manualSyncClose">Закрыть</button>
+    </div>
+    <div class="sync-help mt-6" id="manualSyncHint"></div>
+  </div>
+</div>
+
 <!-- Модалка: синхронизация через GitHub Gist -->
 <div class="modal-overlay" id="syncOverlay">
   <div class="modal-box wide">
     <p class="modal-title">Синхронизация между устройствами</p>
     <div class="sync-status-line" id="syncStatusLine">Не настроено</div>
-    <div class="field-label">Режим работы</div>
+    <div class="field-label">Режим синхронизации</div>
     <label class="role-toggle">
       <input type="checkbox" id="syncFrozenToggle">
-      <span>Приостановить синхронизацию — работать только на этом устройстве. Ничто с сервера не сможет перетереть введённое вручную</span>
+      <span>Только ручная синхронизация — приложение само ничего не отправляет и не загружает. Обмен идёт по кнопке: тап по облачку</span>
     </label>
     <div class="field-label">Роль этого устройства</div>
     <label class="role-toggle">

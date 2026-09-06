@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v95";
+const APP_VERSION = "v96";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -4454,10 +4454,17 @@ const SYNC_PRIMARY_KEY = "potreblenie_sync_primary_v1";
    Снимается переключателем в настройках синхронизации (долгое нажатие на
    облачко). По умолчанию — заморожено. */
 const SYNC_FROZEN_KEY = "potreblenie_sync_frozen_v1";
-function isSyncFrozen() { return localStorage.getItem(SYNC_FROZEN_KEY) !== "0"; }
-function setSyncFrozen(frozen) {
-  try { localStorage.setItem(SYNC_FROZEN_KEY, frozen ? "1" : "0"); } catch (e) {}
+// true — приложение САМО ничего не отправляет и не загружает (режим по умолчанию).
+// Обмен идёт только по нажатию кнопки. Ключ остался прежним, чтобы у уже
+// настроенных устройств ничего не переключилось при обновлении.
+function isAutoSyncOff() { return localStorage.getItem(SYNC_FROZEN_KEY) !== "0"; }
+function setAutoSyncOff(off) {
+  try { localStorage.setItem(SYNC_FROZEN_KEY, off ? "1" : "0"); } catch (e) {}
 }
+// Автоматика разрешена: и настроено, и режим не ручной. Этим гейтом закрыты
+// ВСЕ автоматические пути — таймер, возврат в приложение, появление сети,
+// опрос сервера, старт приложения.
+function isAutoSyncActive() { return isSyncConfigured() && !isAutoSyncOff(); }
 function isPrimaryDevice() { return localStorage.getItem(SYNC_PRIMARY_KEY) === "1"; }
 const SYNC_SETTINGS_PW_KEY = "potreblenie_sync_settings_pw_v1";
 function getSyncPassword() { return localStorage.getItem(SYNC_SETTINGS_PW_KEY) || ""; }
@@ -4487,10 +4494,81 @@ function openSyncModalGated() {
   if (!verifySyncPassword()) return;
   openSyncModal();
 }
+/* ==================== Ручной обмен с сервером ====================
+   Приложение само на сервер не ходит. Обмен — только по кнопке:
+     • главное устройство выгружает готовый список;
+     • второе (режим просмотра) загружает последний выгруженный.
+   Выгрузка со второго устройства намеренно недоступна — так оно не сможет
+   затереть на сервере список, собранный на главном. */
+function manualModeStatusText() {
+  if (!isSyncConfigured()) {
+    return "Не настроено. Долгое нажатие на облачко — настройки синхронизации.";
+  }
+  return isPrimaryDevice()
+    ? "Главное устройство. Тап по облачку — выгрузить список на сервер."
+    : "Режим просмотра. Тап по облачку — загрузить список с сервера.";
+}
+function formatSyncMoment(ts) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const pad = (n) => String(n).padStart(2, "0");
+  return pad(d.getDate()) + "." + pad(d.getMonth() + 1) + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+}
+function openManualSync() {
+  const primary = isPrimaryDevice();
+  document.getElementById("manualSyncRole").textContent =
+    primary ? "Это устройство: главное" : "Это устройство: второе (только просмотр)";
+  document.getElementById("manualSyncInfo").textContent =
+    "Последний обмен с сервером: " + formatSyncMoment(getLastSyncedAt())
+    + (primary && isDirty() ? " · есть невыгруженные правки" : "");
+  // Со второго устройства выгружать нельзя — прячем кнопку целиком.
+  document.getElementById("manualPushBtn").hidden = !primary;
+  document.getElementById("manualSyncHint").textContent = primary
+    ? "Выгрузка заменяет список на сервере текущим. Загрузка заменит данные на этом устройстве версией с сервера."
+    : "Загрузка заменит данные на этом устройстве последним списком, выгруженным с главного устройства.";
+  openModal("manualSyncOverlay");
+}
 function quickSyncAction() {
   if (!isSyncConfigured()) { openSyncModalGated(); return; }
-  if (isPrimaryDevice()) pushToGistNow(); else pullFromGist();
+  openManualSync();
 }
+
+async function manualPush() {
+  closeModal("manualSyncOverlay");
+  setSyncStatus("syncing", "Выгружаем список на сервер…");
+  await pushToGistNow(true);
+}
+async function manualPull() {
+  closeModal("manualSyncOverlay");
+  // Загрузка заменяет данные устройства. Если здесь есть свои правки, ещё не
+  // ушедшие на сервер, — предупреждаем, иначе они пропадут молча.
+  if (isDirty() && !confirm("На этом устройстве есть правки, которых нет на сервере.\n\n"
+      + "Загрузка заменит их версией с сервера. Продолжить?")) return;
+  setSyncStatus("syncing", "Загружаем список с сервера…");
+  const ok = await pullFromGist(false, false, true);
+  if (ok) return;
+  // Отказ мог быть защитой от устаревшего ответа сервера — предлагаем настоять.
+  const { token, gistId } = getSyncConfig();
+  if (!token || !gistId) return;
+  let remote = null;
+  try {
+    const data = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
+    const file = data.files && data.files[SYNC_FILENAME];
+    remote = (file && file.content) ? JSON.parse(file.content) : null;
+  } catch (e) { return; }
+  const verdict = shouldApplyRemote(remote);
+  if (verdict.apply || verdict.same) return;
+  if (confirm("Версия на сервере " + verdict.reason
+      + ".\n\nВсё равно загрузить её и ЗАМЕНИТЬ данные на этом устройстве?")) {
+    pullFromGist(false, true, true);
+  }
+}
+document.getElementById("manualPushBtn").addEventListener("click", manualPush);
+document.getElementById("manualPullBtn").addEventListener("click", manualPull);
+document.getElementById("manualSyncClose").addEventListener("click", () => closeModal("manualSyncOverlay"));
+document.getElementById("manualSyncOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "manualSyncOverlay") closeModal("manualSyncOverlay");
+});
 // Гостевой режим: синхронизация настроена, но это устройство не главное —
 // на вкладке «Учёт» скрываем +/- и добавление, оставляем только список с поиском.
 function isGuestMode() { return isSyncConfigured() && !isPrimaryDevice(); }
@@ -4569,11 +4647,6 @@ function getSyncConfig() {
   };
 }
 function isSyncConfigured() {
-  // Заморожено — ведём себя так, будто синхронизация не настроена: это разом
-  // отключает автоотправку (scheduleSync), автозагрузку при возврате в
-  // приложение, опрос сервера подчинённым устройством, отправку по появлению
-  // сети и гостевой режим. Токен и ID Gist при этом сохраняются.
-  if (isSyncFrozen()) return false;
   return !!getSyncConfig().token;
 }
 
@@ -5010,10 +5083,10 @@ async function githubGistRequest(method, url, token, body, _retried) {
   return res.json();
 }
 
-async function pullFromGist(silent, force) {
-  // Пока синхронизация заморожена — никаких загрузок с сервера. Именно эта
-  // операция и затирала свежие локальные данные (см. SYNC_FROZEN_KEY).
-  if (isSyncFrozen()) return false;
+async function pullFromGist(silent, force, manual) {
+  // Автоматически — только когда автоматика разрешена. Вручную (manual) —
+  // всегда: это осознанное нажатие кнопки пользователем.
+  if (!manual && !isAutoSyncActive()) return false;
   const { token, gistId } = getSyncConfig();
   if (!token || !gistId) return false;
   if (!silent) setSyncStatus("syncing", "Загрузка с сервера…");
@@ -5053,8 +5126,8 @@ async function pullFromGist(silent, force) {
 // кто-то (например, вы же с другого устройства) более новую версию данных
 // с момента, когда мы в последний раз читали сервер. Если сохранил — не
 // затираем её молча, а показываем пользователю модалку с выбором.
-async function pushToGistNow() {
-  if (isSyncFrozen()) return;
+async function pushToGistNow(manual) {
+  if (!manual && !isAutoSyncActive()) return;
   const { token, gistId } = getSyncConfig();
   if (!token) return;
   if (syncInFlight) {
@@ -5145,7 +5218,7 @@ async function pushToGistNow() {
     // его сейчас же.
     if (syncQueued) {
       syncQueued = false;
-      pushToGistNow();
+      pushToGistNow(manual);
     }
   }
 }
@@ -5154,7 +5227,7 @@ function scheduleSync() {
   if (applyingRemote) return;          // это мы сами только что применили данные с сервера
   logLocalChange();                    // пишем правку в историю (работает и без синхронизации)
   markLocalChange();                   // запоминаем: на этом устройстве есть свежая правка
-  if (!isSyncConfigured()) return;
+  if (!isAutoSyncActive()) return;     // ручной режим — отправляем только по кнопке
   if (syncTimer) clearTimeout(syncTimer);
   syncTimer = setTimeout(() => { syncTimer = null; pushToGistNow(); }, SYNC_DEBOUNCE_MS);
 }
@@ -5163,7 +5236,7 @@ function scheduleSync() {
 // Используется, когда пользователь сворачивает/закрывает вкладку — лучше
 // попытаться отправить сразу, чем ждать и потерять правки.
 function flushSyncNow() {
-  if (!isSyncConfigured()) return;
+  if (!isAutoSyncActive()) return;
   if (!isDirty()) return;
   if (syncTimer) { clearTimeout(syncTimer); syncTimer = null; }
   if (!syncInFlight) pushToGistNow();
@@ -5180,7 +5253,7 @@ document.addEventListener("visibilitychange", () => {
     // из-за сети) — пробуем отправить их снова, а не просто молчим до
     // следующей правки.
     const modalOpen = document.querySelector(".modal-overlay.open");
-    if (isSyncConfigured() && !syncInFlight && !modalOpen) {
+    if (isAutoSyncActive() && !syncInFlight && !modalOpen) {
       if (!isPrimaryDevice() || !isDirty()) pullFromGist(true);
       else pushToGistNow();
     }
@@ -5191,7 +5264,7 @@ window.addEventListener("pagehide", flushSyncNow);
 // остались неотправленные правки, пробуем сразу же, не дожидаясь новой
 // правки или следующего сворачивания вкладки.
 window.addEventListener("online", () => {
-  if (isSyncConfigured() && isDirty() && !syncInFlight) pushToGistNow();
+  if (isAutoSyncActive() && isDirty() && !syncInFlight) pushToGistNow();
 });
 
 // Подчинённое устройство само периодически проверяет сервер, пока страница
@@ -5199,7 +5272,7 @@ window.addEventListener("online", () => {
 // необходимости сворачивать/открывать вкладку заново.
 function setupSecondaryPolling() {
   if (secondaryPollTimer) { clearInterval(secondaryPollTimer); secondaryPollTimer = null; }
-  if (!isSyncConfigured() || isPrimaryDevice()) return;
+  if (!isAutoSyncActive() || isPrimaryDevice()) return;
   secondaryPollTimer = setInterval(() => {
     if (document.visibilityState !== "visible") return;
     if (syncInFlight || applyingRemote) return;
@@ -5215,7 +5288,7 @@ function openSyncModal() {
   document.getElementById("syncGistIdInput").value = gistId;
   document.getElementById("syncPrimaryToggle").checked = isPrimaryDevice();
   const frozenToggle = document.getElementById("syncFrozenToggle");
-  if (frozenToggle) frozenToggle.checked = isSyncFrozen();
+  if (frozenToggle) frozenToggle.checked = isAutoSyncOff();
   openModal("syncOverlay");
 }
 function closeSyncModal() {
@@ -5266,15 +5339,15 @@ document.getElementById("syncPrimaryToggle").addEventListener("change", (e) => {
   const frozenToggle = document.getElementById("syncFrozenToggle");
   if (frozenToggle) {
     frozenToggle.addEventListener("change", (e) => {
-      setSyncFrozen(e.target.checked);
+      setAutoSyncOff(e.target.checked);
       setupSecondaryPolling();
       updateGuestModeUI();
       updateDirtyIndicator();
       if (e.target.checked) {
-        setSyncStatus("frozen", "Синхронизация приостановлена — приложение работает только на этом устройстве. "
-          + "Всё, что вы вводите, сохраняется сразу и никуда не пропадёт.");
+        setSyncStatus(isSyncConfigured() ? "idle" : "off", manualModeStatusText());
       } else if (isSyncConfigured()) {
-        setSyncStatus("idle", "Синхронизация включена. Данные с сервера снова могут заменять локальные.");
+        setSyncStatus("idle", "Автоматическая синхронизация включена: приложение будет само "
+          + "отправлять правки и подтягивать версию с сервера.");
       } else {
         setSyncStatus("off", "Не настроено. Укажите токен, чтобы включить синхронизацию.");
       }
@@ -5296,11 +5369,18 @@ document.getElementById("syncSaveBtn").addEventListener("click", async () => {
   // модалку выбора, если на сервере тем временем что-то ещё изменилось).
   // Нечего терять (uже всё синхронизировано или это первое подключение
   // к существующему Gist) → можно спокойно подтянуть версию с сервера.
-  if (gistId && !isDirty()) {
-    const ok = await pullFromGist();
-    if (!ok) await pushToGistNow();
+  // Нажатие кнопки — осознанное действие, поэтому обмен разрешён и в ручном
+  // режиме (manual = true). Второе устройство при этом только ЗАБИРАЕТ список:
+  // выгружать ему нечего и незачем, иначе оно могло бы затереть на сервере
+  // список, собранный на главном.
+  if (!isPrimaryDevice()) {
+    if (gistId) await pullFromGist(false, false, true);
+    else alert("Укажите ID Gist — второе устройство только загружает список с сервера.");
+  } else if (gistId && !isDirty()) {
+    const ok = await pullFromGist(false, false, true);
+    if (!ok) await pushToGistNow(true);
   } else {
-    await pushToGistNow();
+    await pushToGistNow(true);
   }
   setupSecondaryPolling();
   updateGuestModeUI();
@@ -5308,24 +5388,8 @@ document.getElementById("syncSaveBtn").addEventListener("click", async () => {
 /* Ручная загрузка. Если автоматика отказалась применять версию с сервера
    (она старше локальной), кнопка честно об этом спрашивает — на случай,
    когда сервер намеренно откатили и загрузить старую версию нужно. */
-document.getElementById("syncPullBtn").addEventListener("click", async () => {
-  const ok = await pullFromGist(false);
-  if (ok) return;
-  const { token, gistId } = getSyncConfig();
-  if (!token || !gistId || isSyncFrozen()) return;
-  let remote = null;
-  try {
-    const data = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
-    const file = data.files && data.files[SYNC_FILENAME];
-    remote = (file && file.content) ? JSON.parse(file.content) : null;
-  } catch (e) { return; }
-  const verdict = shouldApplyRemote(remote);
-  if (verdict.apply || verdict.same) return;
-  if (confirm("Версия на сервере " + verdict.reason
-      + ".\n\nВсё равно загрузить её и ЗАМЕНИТЬ данные на этом устройстве?")) {
-    pullFromGist(false, true);
-  }
-});
+// Та же кнопка, что и в окне обмена, — поведение одно на оба места.
+document.getElementById("syncPullBtn").addEventListener("click", manualPull);
 document.getElementById("syncHistoryBtn").addEventListener("click", () => {
   renderSyncHistory();
   openModal("syncHistoryOverlay");
@@ -5382,9 +5446,14 @@ localLogLastState = snapshotForLog();
 // очищенные названия и проставленные модели ушли на сервер, а не остались
 // только на этом устройстве.
 if (migrationTouchedAtStartup && isPrimaryDevice()) markLocalChange();
-if (isSyncFrozen()) {
-  setSyncStatus("frozen", "Синхронизация приостановлена — приложение работает только на этом устройстве. "
-    + "Всё, что вы вводите, сохраняется сразу и никуда не пропадёт.");
+// Устройство, настроенное ДО появления ролей, считаем главным: именно на нём
+// вы работали. Иначе после обновления оно молча стало бы «вторым» и перешло
+// в режим просмотра — без панели добавления и кнопок +/-.
+if (isSyncConfigured() && localStorage.getItem(SYNC_PRIMARY_KEY) === null) {
+  try { localStorage.setItem(SYNC_PRIMARY_KEY, "1"); } catch (e) {}
+}
+if (isAutoSyncOff()) {
+  setSyncStatus(isSyncConfigured() ? "idle" : "off", manualModeStatusText());
 } else if (isSyncConfigured()) {
   if (!isPrimaryDevice()) {
     // Подчинённое устройство: сервер всегда главнее — просто подтягиваем.
