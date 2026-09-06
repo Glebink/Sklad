@@ -73,7 +73,9 @@
     align-items: center;
     gap: 8px;
   }
-  .sticky-top .search-bar {
+  /* Всё, что лежит в общей шапке (строка поиска и панель добавления), —
+     одинаковый отступ сверху вместо собственного margin-top у .add-panel. */
+  .sticky-top .add-panel {
     margin: 10px 0 0 0;
   }
   .tab-btn {

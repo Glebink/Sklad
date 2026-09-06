@@ -51,11 +51,10 @@
   <div class="add-panel search-bar hide-init" id="whSearchBar"></div>
   <div class="add-panel search-bar" id="caSearchBar"></div>
   <div class="add-panel search-bar hide-init" id="ocSearchBar"></div>
-</div>
 
-<!-- ===================== ВКЛАДКА: УЧЁТ ===================== -->
-<div class="view active" id="viewConsumption">
-
+  <!-- Панель добавления живёт в общей шапке: на «Учёте» она нужна постоянно,
+       а список под ней длинный. Показывается только на «Учёте» — см.
+       updateAddPanelVisibility(). -->
   <div class="add-panel one-row" id="addPanelConsumption">
     <select id="newItemSection">
       <option value="parts">Детали</option>
@@ -68,6 +67,10 @@
     <input type="number" id="newItemQty" min="1" placeholder="1" title="Количество (если пусто — 1)">
     <button class="util primary" id="addItemBtn" title="Добавить">+</button>
   </div>
+</div>
+
+<!-- ===================== ВКЛАДКА: УЧЁТ ===================== -->
+<div class="view active" id="viewConsumption">
 
   <div class="section-head">
     <h2 class="section-title">Детали</h2>

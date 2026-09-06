@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v98";
+const APP_VERSION = "v99";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1316,6 +1316,15 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   const name = newItemInput.value.trim();
   if (!name) return;
   const code = (addPicked && addPicked.name === name) ? addPicked.code : "";
+  const qtyInput = document.getElementById("newItemQty");
+  let qty = parseInt(qtyInput.value, 10);
+  if (isNaN(qty) || qty < 1) qty = 1;   // не указали — считаем как 1
+  const clearForm = () => {
+    newItemInput.value = "";
+    qtyInput.value = "";
+    addPicked = null;
+    addSuggestBox.classList.remove("open");
+  };
   // Уникальность позиции определяет КОД, а не название: одинаково
   // названные детали под разные модели (например «Подшипник вилки»
   // с кодами 456JY50-01-0 и 454LB40-01-0) — это разные позиции, и обе
@@ -1325,22 +1334,25 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
     code ? (it.code === code) : (!it.code && it.name === name)
   );
   if (dupIndex !== -1) {
-    alert("Такая позиция уже есть в этом списке.");
+    // Позиция уже в списке — ПРИБАВЛЯЕМ количество к набранному. Раньше
+    // здесь был отказ «такая позиция уже есть», и дописать ещё столько-то
+    // можно было только кнопками +/− в самой строке.
+    const existing = sections[section][dupIndex];
+    const key = countKey(section, existing);
+    pushHistory();
+    counts[key] = (counts[key] || 0) + qty;
+    persistCurrent();
+    clearForm();
+    renderSection(section);
     flashRow(rowByDataIndex("body-" + section, dupIndex));
     return;
   }
-  const qtyInput = document.getElementById("newItemQty");
-  let qty = parseInt(qtyInput.value, 10);
-  if (isNaN(qty) || qty < 1) qty = 1;   // не указали — считаем как 1
   pushHistory();
   const newItem = { name, code };
   sections[section].push(newItem);
   counts[countKey(section, newItem)] = qty;
   persistCurrent();
-  newItemInput.value = "";
-  qtyInput.value = "";
-  addPicked = null;
-  addSuggestBox.classList.remove("open");
+  clearForm();
   renderSection(section);
   // Новая позиция уходит в свою группу по модели, а не в конец списка —
   // ищем её по индексу, иначе подсветилась бы чужая строка.
@@ -2372,8 +2384,21 @@ function applyCaSearch() { applySearchFns.ca(); }
 function applyWhSearch() { applySearchFns.wh(); }
 function applyOcSearch() { applySearchFns.oc(); }
 
+/* Панель добавления перенесена в общую шапку, поэтому её видимость больше не
+   определяется вкладкой автоматически (раньше она лежала внутри «Учёта»).
+   Показываем её только на «Учёте» и только когда устройство не в режиме
+   просмотра, и сразу пересчитываем высоту распорки под шапкой. */
+let currentTab = "consumption";
+function updateAddPanelVisibility() {
+  const panel = document.getElementById("addPanelConsumption");
+  if (!panel) return;
+  panel.style.display = (currentTab === "consumption" && !isGuestMode()) ? "flex" : "none";
+  syncStickyTopHeight();
+}
+
 /* Показывает строку поиска нужной вкладки, остальные прячет и очищает */
 function showSearchBarFor(tab) {
+  currentTab = tab;
   const map = {
     consumption: "ca",
     warehouse: "wh",
@@ -2390,6 +2415,7 @@ function showSearchBarFor(tab) {
       if (input.value) { input.value = ""; applySearchFns[key](); }
     }
   });
+  updateAddPanelVisibility();
   updateStickySearch();
 }
 
@@ -4662,8 +4688,7 @@ document.getElementById("manualSyncOverlay").addEventListener("click", (e) => {
 // на вкладке «Учёт» скрываем +/- и добавление, оставляем только список с поиском.
 function isGuestMode() { return isSyncConfigured() && !isPrimaryDevice(); }
 function updateGuestModeUI() {
-  const panel = document.getElementById("addPanelConsumption");
-  if (panel) panel.style.display = isGuestMode() ? "none" : "";
+  updateAddPanelVisibility();
   renderAll();
 }
 const SECONDARY_POLL_MS = 30000; // как часто подчинённое устройство само проверяет сервер
