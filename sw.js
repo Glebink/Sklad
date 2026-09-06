@@ -1,4 +1,6 @@
-const CACHE_NAME = "sklad-cache-v100";
+// Держать одинаковым с APP_VERSION в app.js. Нумерация с шагом 0.1:
+// sklad-cache-v1.0, v1.1, v1.2 и так далее.
+const CACHE_NAME = "sklad-cache-v1.0";
 const ASSETS = [
   "./index.html",
   "./style.css",
