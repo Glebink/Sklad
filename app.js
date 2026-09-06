@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v97";
+const APP_VERSION = "v98";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -808,8 +808,11 @@ function toggleRowPick(store, section, key, tr) {
   }
 }
 function applyPickHighlight(store, section, tbody, list, keyFn) {
-  Array.from(tbody.querySelectorAll("tr")).forEach((tr, i) => {
-    const item = list[i];
+  // Только строки позиций (у заголовков групп нет data-index) и только по
+  // индексу в массиве: на «Учёте» строки идут группами по моделям, поэтому
+  // позиция строки на экране ничего не значит.
+  Array.from(tbody.querySelectorAll("tr[data-index]")).forEach((tr) => {
+    const item = list[parseInt(tr.dataset.index, 10)];
     if (!item) return;
     tr.classList.toggle("row-picked", store[section].has(keyFn(item)));
   });
@@ -823,11 +826,51 @@ function flashRow(tr) {
 }
 
 /* ==================== Рендер: вкладка «Учёт» ==================== */
+/* Порядок групп в «Учёте». Всё, чего здесь нет, идёт следом по алфавиту,
+   а позиции без модели — в самом конце. */
+const CA_MODEL_ORDER = ["9Bot", "YGW 4.0", "YGW 5.0"];
+function caModelOf(item) {
+  const info = item.code ? warehouseInfoFor(item.code) : null;
+  return (info && info.model) || "";
+}
+/* Раскладывает позиции раздела по моделям в нужном порядке.
+   Возвращает [{ model, pairs: [{ item, i }] }] — i остаётся ИНДЕКСОМ В
+   МАССИВЕ, а не номером строки на экране: на него завязаны кнопки строки,
+   поиск, подсветка и переходы. */
+function caGroups(section) {
+  const byModel = new Map();
+  sections[section].forEach((item, i) => {
+    const m = caModelOf(item);
+    if (!byModel.has(m)) byModel.set(m, []);
+    byModel.get(m).push({ item, i });
+  });
+  const rank = (m) => {
+    if (!m) return 3000;                                  // без модели — в конец
+    const known = CA_MODEL_ORDER.indexOf(m);
+    return known === -1 ? 2000 : known;                   // прочие — между
+  };
+  return [...byModel.keys()]
+    .sort((a, b) => (rank(a) - rank(b)) || a.localeCompare(b, "ru"))
+    .map((model) => ({ model, pairs: byModel.get(model) }));
+}
+
 function renderSection(section) {
   const tbody = document.getElementById("body-" + section);
   tbody.innerHTML = "";
-  const list = sections[section];
-  list.forEach((item, i) => {
+  const groups = caGroups(section);
+  // Заголовок нужен, только если групп больше одной: у «Расходников» модели
+  // обычно нет вовсе, и единственная надпись «Без модели» была бы мусором.
+  const showHeaders = groups.length > 1;
+  let rowNo = 0;                       // № идёт подряд по тому, что видно
+  groups.forEach(({ model, pairs }) => {
+    if (showHeaders) {
+      const head = document.createElement("tr");
+      head.className = "group-row";
+      head.innerHTML = `<td colspan="5">${escapeHtml(model || "Без модели")} · ${pairs.length}</td>`;
+      tbody.appendChild(head);
+    }
+    pairs.forEach(({ item, i }) => {
+    rowNo++;
     const key = countKey(section, item);
     if (counts[key] === undefined) counts[key] = 0;
     const isChecked = !!checked[key];
@@ -838,8 +881,9 @@ function renderSection(section) {
     const modelLabel = (whInfoForModel && whInfoForModel.model) || "";
     const tr = document.createElement("tr");
     tr.dataset.key = key;
+    tr.dataset.index = i;          // индекс в массиве: строки идут не по нему
     tr.innerHTML = `
-      <td class="num">${i + 1}</td>
+      <td class="num">${rowNo}</td>
       <td class="code">${item.code ? `<span class="code-text" data-code="${escapeHtml(item.code)}">${formatCodeDisplay(item.code)}</span>` : "—"}</td>
       <td class="name">
         ${escapeHtml(item.name)}
@@ -864,8 +908,9 @@ function renderSection(section) {
       </td>
     `;
     tbody.appendChild(tr);
+    });
   });
-  applyPickHighlight(selectedCA, section, tbody, list, (it) => countKey(section, it));
+  applyPickHighlight(selectedCA, section, tbody, sections[section], (it) => countKey(section, it));
   if (typeof applyCaSearch === "function") applyCaSearch();
 }
 function renderAll() {
@@ -1297,9 +1342,9 @@ document.getElementById("addItemBtn").addEventListener("click", () => {
   addPicked = null;
   addSuggestBox.classList.remove("open");
   renderSection(section);
-  const tbody = document.getElementById("body-" + section);
-  const rows = tbody.querySelectorAll("tr");
-  flashRow(rows[rows.length - 1]);
+  // Новая позиция уходит в свою группу по модели, а не в конец списка —
+  // ищем её по индексу, иначе подсветилась бы чужая строка.
+  flashRow(rowByDataIndex("body-" + section, sections[section].length - 1));
 });
 newItemInput.addEventListener("keydown", (e) => {
   if (e.key === "Enter") document.getElementById("addItemBtn").click();
@@ -1391,10 +1436,8 @@ document.getElementById("editItemSave").addEventListener("click", () => {
   persistCurrent();
   if (sectionChanged) {
     renderAll();
-    // подсветим, куда переехала позиция
-    const tbody = document.getElementById("body-" + newSection);
-    const rows = tbody.querySelectorAll("tr");
-    flashRow(rows[rows.length - 1]);
+    // подсветим, куда переехала позиция (она в своей группе, не в конце)
+    flashRow(rowByDataIndex("body-" + newSection, sections[newSection].length - 1));
   } else {
     renderSection(section);
   }
@@ -4072,17 +4115,14 @@ function runSearch(k, bodyPrefix, store, matchFn) {
   ["parts", "consumables"].forEach((section) => {
     const tbody = document.getElementById(bodyPrefix + section);
     if (!tbody) return;
-    // Берём позиции ровно в том порядке, в каком они нарисованы. Раньше
-    // здесь было store[section][i] — номер строки на экране использовался
-    // как индекс в данных, и при включённом фильтре (склад — по модели,
-    // 1С — по разделу/остатку) поиск сверялся не с теми позициями.
-    const visible = (bodyPrefix === "wh-body-" && typeof whFilteredPairs === "function")
-      ? whFilteredPairs(section).map((p) => p.item)
-      : (bodyPrefix === "oc-body-" && typeof ocFilteredPairs === "function")
-        ? ocFilteredPairs(section).map((p) => p.item)
-        : store[section];
-    Array.prototype.forEach.call(tbody.querySelectorAll("tr"), (tr, i) => {
-      const item = visible[i];
+    // У каждой строки есть свой индекс в массиве — берём позицию по нему.
+    // Раньше здесь номер строки на экране использовался как индекс в данных,
+    // и приходилось отдельно пересчитывать отфильтрованные списки склада и
+    // 1С. Теперь это не нужно и работает при любом порядке строк: и с
+    // фильтром, и с группировкой по моделям на «Учёте». Заголовки групп
+    // пропускаются сами — у них нет data-index.
+    Array.prototype.forEach.call(tbody.querySelectorAll("tr[data-index]"), (tr) => {
+      const item = store[section][parseInt(tr.dataset.index, 10)];
       if (!item) return;
       const hit = q.length > 0 && matchFn(item, q);
       tr.classList.toggle("row-match", hit);

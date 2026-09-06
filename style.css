@@ -230,6 +230,17 @@
   td:last-child, th:last-child { border-right: none; }
   tbody tr:nth-child(even) { background: var(--row-alt); }
   tbody tr { border-bottom: 1px solid var(--border); }
+  /* Заголовок группы по модели в «Учёте». Фон ставим на саму ячейку: у
+     строки он спорит с полосатой раскраской tbody tr:nth-child(even). */
+  tbody tr.group-row td {
+    background: #dbe3ec;
+    padding: 5px 8px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #41506a;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+  }
   tbody tr.row-match { background: #fef08a !important; }
   tbody tr.row-picked { background: #fde68a !important; }
   tbody tr.row-flash { background: #fef08a !important; }
