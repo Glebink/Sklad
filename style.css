@@ -1022,23 +1022,65 @@
     flex-wrap: nowrap;
     gap: 8px;
   }
+  /* Ширину селекта подгоняет JS под ВЫБРАННЫЙ пункт (fitSectionSelectWidth):
+     фиксированные 92px либо оставляли пустое место у «Деталей», либо резали
+     «Расходники» многоточием. Здесь — только страховка на случай, если JS не
+     отработал. */
   .add-panel.one-row select {
     flex: 0 0 auto;
-    width: 92px;
+    min-width: 0;
+    /* Системный вид списка убран: на iOS он добавляет свою широкую стрелку и
+       внутренние поля, из-за которых рамка была заметно шире текста. Рисуем
+       компактную стрелку сами — тогда ширина ровно по выбранному пункту. */
+    -webkit-appearance: none;
+    appearance: none;
     padding-left: 8px;
-    padding-right: 4px;
-    text-overflow: ellipsis;
-    overflow: hidden;
+    padding-right: 20px;
     white-space: nowrap;
+    color: #1f2430;
+    background-color: #fff;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%2364748b' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    background-size: 9px 6px;
   }
+  /* Точка отсчёта для крестика очистки. Подсказки специально вынесены из
+     этой обёртки в саму панель — иначе они сузились бы до ширины поля. */
   .add-panel.one-row .add-name-wrap {
     flex: 1 1 auto;
     min-width: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
   }
   .add-panel.one-row .add-name-wrap input[type="text"] {
     width: 100%;
     min-width: 0;
+    padding-right: 32px;      /* место под крестик, текст под него не заезжает */
   }
+  /* Крестик лежит ПОВЕРХ правого края поля, а не рядом: так поле не
+     сужается, когда крестик появляется. Показывается только при наборе. */
+  .add-panel.one-row .add-clear {
+    display: none;
+    position: absolute;
+    right: 6px;
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 50%;
+    background: #e2e8f0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .add-panel.one-row .add-clear.show { display: flex; }
+  .add-panel.one-row .add-clear:active { background: #cbd5e1; }
   /* Подсказки при вводе названия — во всю ширину панели (а не узкого поля
      ввода), чтобы длинные названия и коды было видно целиком. */
   .add-panel.one-row #addSuggestBox {

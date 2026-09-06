@@ -62,10 +62,14 @@
     </select>
     <div class="add-name-wrap">
       <input type="text" id="newItemName" placeholder="начните вводить название" autocomplete="off">
-      <div class="suggest-box" id="addSuggestBox"></div>
+      <button type="button" class="add-clear" id="newItemClear" title="Очистить">✕</button>
     </div>
     <input type="number" id="newItemQty" min="1" placeholder="1" title="Количество (если пусто — 1)">
     <button class="util primary" id="addItemBtn" title="Добавить">+</button>
+    <!-- Подсказки — прямой потомок панели, а не обёртки поля: обёртке нужен
+         position:relative под крестик, и подсказки иначе сузились бы до
+         ширины поля ввода вместо всей панели. -->
+    <div class="suggest-box" id="addSuggestBox"></div>
   </div>
 </div>
 
