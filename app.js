@@ -515,7 +515,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Номер версии файлов — держим руками синхронно с CACHE_NAME в sw.js
 // (при каждом поднятии кэша меняем и тут). Просто отображается в углу
 // шапки — чтобы проверить, долетело ли обновление до устройства.
-const APP_VERSION = "v96";
+const APP_VERSION = "v97";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -4518,9 +4518,13 @@ function openManualSync() {
   const primary = isPrimaryDevice();
   document.getElementById("manualSyncRole").textContent =
     primary ? "Это устройство: главное" : "Это устройство: второе (только просмотр)";
-  document.getElementById("manualSyncInfo").textContent =
+  // Сбрасываем состояние прошлого обмена (текст ошибки, блокировку кнопок).
+  const info = document.getElementById("manualSyncInfo");
+  info.classList.remove("err");
+  info.textContent =
     "Последний обмен с сервером: " + formatSyncMoment(getLastSyncedAt())
     + (primary && isDirty() ? " · есть невыгруженные правки" : "");
+  manualSyncBusy(false);
   // Со второго устройства выгружать нельзя — прячем кнопку целиком.
   document.getElementById("manualPushBtn").hidden = !primary;
   document.getElementById("manualSyncHint").textContent = primary
@@ -4533,25 +4537,62 @@ function quickSyncAction() {
   openManualSync();
 }
 
+/* Результат обмена показываем ПРЯМО В ОКНЕ. Раньше окно закрывалось сразу, и
+   при ошибке оставался только восклицательный знак на облачке — причина была
+   не видна вообще. */
+function manualSyncBusy(on) {
+  ["manualPushBtn", "manualPullBtn", "manualSyncClose"].forEach((id) => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = on;
+  });
+}
+function showManualResult(text, isErr) {
+  const el = document.getElementById("manualSyncInfo");
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle("err", !!isErr);
+}
+// К тексту ошибки добавляем ID Gist — по нему сразу видно, смотрят ли оба
+// устройства в один и тот же список.
+function manualErrorText(fallback) {
+  const { gistId } = getSyncConfig();
+  return (lastSyncErrorText || fallback) + (gistId ? "\nGist: " + gistId : "\nID Gist не указан");
+}
+
 async function manualPush() {
-  closeModal("manualSyncOverlay");
+  manualSyncBusy(true);
+  showManualResult("Выгружаем список на сервер…", false);
   setSyncStatus("syncing", "Выгружаем список на сервер…");
-  await pushToGistNow(true);
+  const ok = await pushToGistNow(true);
+  manualSyncBusy(false);
+  if (ok) {
+    showManualResult("Готово — список выгружен на сервер.", false);
+    setTimeout(() => closeModal("manualSyncOverlay"), 1400);
+  } else {
+    showManualResult(manualErrorText("Не удалось выгрузить"), true);
+  }
 }
 async function manualPull() {
-  closeModal("manualSyncOverlay");
   // Загрузка заменяет данные устройства. Если здесь есть свои правки, ещё не
   // ушедшие на сервер, — предупреждаем, иначе они пропадут молча.
   if (isDirty() && !confirm("На этом устройстве есть правки, которых нет на сервере.\n\n"
       + "Загрузка заменит их версией с сервера. Продолжить?")) return;
+  manualSyncBusy(true);
+  showManualResult("Загружаем список с сервера…", false);
   setSyncStatus("syncing", "Загружаем список с сервера…");
   const ok = await pullFromGist(false, false, true);
-  if (ok) return;
+  manualSyncBusy(false);
+  if (ok) {
+    showManualResult("Готово — список загружен с сервера.", false);
+    setTimeout(() => closeModal("manualSyncOverlay"), 1400);
+    return;
+  }
+  showManualResult(manualErrorText("Не удалось загрузить"), true);
   // Отказ мог быть защитой от устаревшего ответа сервера — предлагаем настоять.
   const { token, gistId } = getSyncConfig();
   if (!token || !gistId) return;
   let remote = null;
-  try {
+  try {  // ещё раз читаем сервер — понять, был ли это отказ защиты
     const data = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
     const file = data.files && data.files[SYNC_FILENAME];
     remote = (file && file.content) ? JSON.parse(file.content) : null;
@@ -4560,7 +4601,15 @@ async function manualPull() {
   if (verdict.apply || verdict.same) return;
   if (confirm("Версия на сервере " + verdict.reason
       + ".\n\nВсё равно загрузить её и ЗАМЕНИТЬ данные на этом устройстве?")) {
-    pullFromGist(false, true, true);
+    manualSyncBusy(true);
+    const forced = await pullFromGist(false, true, true);
+    manualSyncBusy(false);
+    if (forced) {
+      showManualResult("Готово — список загружен с сервера.", false);
+      setTimeout(() => closeModal("manualSyncOverlay"), 1400);
+    } else {
+      showManualResult(manualErrorText("Не удалось загрузить"), true);
+    }
   }
 }
 document.getElementById("manualPushBtn").addEventListener("click", manualPush);
@@ -4650,7 +4699,12 @@ function isSyncConfigured() {
   return !!getSyncConfig().token;
 }
 
+// Текст последней ошибки обмена. Нужен, чтобы окно обмена показало ПРИЧИНУ,
+// а не только восклицательный знак на облачке.
+let lastSyncErrorText = "";
 function setSyncStatus(state, text) {
+  if (state === "err") lastSyncErrorText = text || "";
+  else if (state === "ok") lastSyncErrorText = "";
   const btn = document.getElementById("syncBtn");
   const line = document.getElementById("syncStatusLine");
   btn.classList.remove("err", "syncing");
@@ -5088,7 +5142,13 @@ async function pullFromGist(silent, force, manual) {
   // всегда: это осознанное нажатие кнопки пользователем.
   if (!manual && !isAutoSyncActive()) return false;
   const { token, gistId } = getSyncConfig();
-  if (!token || !gistId) return false;
+  if (!token || !gistId) {
+    // Раньше здесь был молчаливый отказ: на втором устройстве с незаполненным
+    // ID Gist кнопка просто «ничего не делала».
+    if (manual) setSyncStatus("err", !token ? "Не указан GitHub-токен"
+                                            : "Не указан ID Gist — впишите тот же ID, что на главном устройстве");
+    return false;
+  }
   if (!silent) setSyncStatus("syncing", "Загрузка с сервера…");
   try {
     const data = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
@@ -5127,9 +5187,9 @@ async function pullFromGist(silent, force, manual) {
 // с момента, когда мы в последний раз читали сервер. Если сохранил — не
 // затираем её молча, а показываем пользователю модалку с выбором.
 async function pushToGistNow(manual) {
-  if (!manual && !isAutoSyncActive()) return;
+  if (!manual && !isAutoSyncActive()) return false;
   const { token, gistId } = getSyncConfig();
-  if (!token) return;
+  if (!token) { setSyncStatus("err", "Не указан GitHub-токен"); return false; }
   if (syncInFlight) {
     // Отправка уже идёт (например, только что стартовала по таймеру), а тут
     // подоспело ещё одно изменение. Раньше это изменение просто терялось —
@@ -5157,7 +5217,7 @@ async function pushToGistNow(manual) {
       if (gistInput) gistInput.value = created.id;
       markSyncedTo(payload.updatedAt, payload, "push");
       setSyncStatus("ok", "Синхронизировано: " + new Date().toLocaleTimeString().slice(0, 5));
-      return;
+      return true;
     }
     // Сверяем версию на сервере с той, что мы видели в последний раз.
     const remote = await githubGistRequest("GET", "https://api.github.com/gists/" + gistId, token);
@@ -5186,7 +5246,7 @@ async function pushToGistNow(manual) {
         });
         markSyncedTo(payload.updatedAt, payload, "push");
         setSyncStatus("ok", "Синхронизировано (главное устройство): " + new Date().toLocaleTimeString().slice(0, 5));
-        return;
+        return true;
       } else {
         // Подчинённое устройство: не спрашиваем — молча берём версию с сервера.
         applyingRemote = true;
@@ -5197,7 +5257,7 @@ async function pushToGistNow(manual) {
         }
         markSyncedTo(remotePayload.updatedAt, remotePayload, "pull");
         setSyncStatus("ok", "Обновлено с сервера (автоматически): " + new Date().toLocaleTimeString().slice(0, 5));
-        return;
+        return true;
       }
     }
 
@@ -5209,9 +5269,11 @@ async function pushToGistNow(manual) {
     });
     markSyncedTo(payload.updatedAt, payload, "push");
     setSyncStatus("ok", "Синхронизировано: " + new Date().toLocaleTimeString().slice(0, 5));
+    return true;
   } catch (e) {
     setSyncStatus("err", "Не удалось сохранить: " + e.message);
     logSyncFailure("push", payload, e.message);
+    return false;
   } finally {
     syncInFlight = false;
     // Пока мы отправляли этот запрос, пришло ещё одно изменение — досылаем
