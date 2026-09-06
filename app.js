@@ -520,7 +520,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Раньше был сплошной счётчик (…v98, v99, v100), с версии v1.0 — этот
 // формат. Версия нигде не сравнивается как число, только показывается и
 // пишется в резервную копию, так что смена формата ничего не ломает.
-const APP_VERSION = "v1.0";
+const APP_VERSION = "v1.1";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -866,8 +866,8 @@ function renderSection(section) {
   // Заголовок нужен, только если групп больше одной: у «Расходников» модели
   // обычно нет вовсе, и единственная надпись «Без модели» была бы мусором.
   const showHeaders = groups.length > 1;
-  let rowNo = 0;                       // № идёт подряд по тому, что видно
   groups.forEach(({ model, pairs }) => {
+    let rowNo = 0;                     // нумерация своя внутри каждой модели
     if (showHeaders) {
       const head = document.createElement("tr");
       head.className = "group-row";
@@ -4237,7 +4237,10 @@ function goToMatch(k, delta) {
     const input = document.getElementById(k + "SearchInput");
     input.value = "";
     ({ ca: applyCaSearch, wh: applyWhSearch, oc: applyOcSearch })[k]();
-    input.focus();
+    // Фокус в поле НЕ возвращаем: на телефоне это поднимало клавиатуру
+    // сразу после того, как нужную строку уже нашли. Крестик только чистит
+    // текст. Если фокус на поле всё-таки был — снимаем его.
+    if (document.activeElement === input) input.blur();
   });
   document.getElementById(k + "SearchPrev").addEventListener("click", () => goToMatch(k, -1));
   document.getElementById(k + "SearchNext").addEventListener("click", () => goToMatch(k, 1));
