@@ -520,7 +520,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Раньше был сплошной счётчик (…v98, v99, v100), с версии v1.0 — этот
 // формат. Версия нигде не сравнивается как число, только показывается и
 // пишется в резервную копию, так что смена формата ничего не ломает.
-const APP_VERSION = "v1.1";
+const APP_VERSION = "v1.2";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -3646,14 +3646,30 @@ function altNameHtml(selfCode, info, clickable) {
   return `<div class="${cls}" title="${escapeHtml(full)}">${codePart}${escapeHtml(short)}</div>`;
 }
 
+/* Прокрутка к строке с учётом закреплённой шапки.
+   scrollIntoView({block:"center"}) не годится: на телефоне он центрирует по
+   ВИДИМОЙ области (при открытой клавиатуре она низкая), и строка уезжала под
+   шапку — особенно после того, как в шапку добавилась панель добавления.
+   Здесь строка ставится по центру свободной полосы НИЖЕ шапки. */
+function scrollRowIntoView(tr) {
+  if (!tr || !tr.getBoundingClientRect) return;
+  const head = document.getElementById("stickyTop");
+  const top = head ? Math.max(0, head.getBoundingClientRect().bottom) : 0;
+  const vv = window.visualViewport;
+  const vh = (vv && vv.height) || window.innerHeight;
+  const free = Math.max(60, vh - top);            // сколько видно под шапкой
+  const r = tr.getBoundingClientRect();
+  const pad = Math.max(0, (free - r.height) / 2); // центр этой полосы
+  const y = window.pageYOffset + r.top - top - pad;
+  window.scrollTo(0, Math.max(0, y));
+}
+
 /* Подсветить строки и прокрутить к первой из них */
 function highlightRows(rows) {
   document.querySelectorAll(".row-flash").forEach((el) => el.classList.remove("row-flash"));
   let first = null;
   rows.forEach((tr) => { if (tr && !first) first = tr; });
-  if (first && first.scrollIntoView) {
-    first.scrollIntoView({ block: "center" });
-  }
+  scrollRowIntoView(first);
   // ВАЖНО: подсветку ставим следующим тактом. Иначе клик, которым вызвана
   // сама операция (например ↶), долетит до общего обработчика документа
   // и тут же снимет её.
@@ -4227,7 +4243,7 @@ function goToMatch(k, delta) {
   st.rows.forEach((tr) => tr.classList.remove("row-current"));
   const tr = st.rows[st.pos];
   tr.classList.add("row-current");
-  if (tr.scrollIntoView) tr.scrollIntoView({ block: "center" });
+  scrollRowIntoView(tr);
   setTimeout(updateStickySearch, 350);
   updateSearchCounter(k);
 }
