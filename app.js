@@ -520,7 +520,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Раньше был сплошной счётчик (…v98, v99, v100), с версии v1.0 — этот
 // формат. Версия нигде не сравнивается как число, только показывается и
 // пишется в резервную копию, так что смена формата ничего не ломает.
-const APP_VERSION = "v1.3";
+const APP_VERSION = "v1.4";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -5321,9 +5321,23 @@ async function githubGistRequest(method, url, token, body, _retried) {
     throw new Error("Нет соединения с сервером");
   }
   if (!res.ok) {
+    // Показываем и то, что ответил сам GitHub: без этого «Неверный токен»
+    // выглядит как поломка приложения, хотя чаще всего у токена просто
+    // истёк срок (GitHub выдаёт их на 30/60/90 дней) или его отозвали.
+    let detail = "";
+    try {
+      const body = await res.json();
+      if (body && body.message) detail = String(body.message);
+    } catch (e) { /* тело бывает пустым или не JSON — не страшно */ }
     let msg = "Ошибка " + res.status;
-    if (res.status === 401) msg = "Неверный токен";
-    if (res.status === 404) msg = "Gist не найден (проверьте ID)";
+    if (res.status === 401) {
+      msg = "GitHub не принял токен. Обычно это значит, что у токена истёк срок "
+          + "или его отозвали. Создайте новый токен с правом gist и впишите его "
+          + "в настройках облака (данные на устройстве при этом никуда не денутся)";
+    }
+    if (res.status === 403) msg = "GitHub отказал в доступе: у токена нет права gist либо превышен лимит запросов";
+    if (res.status === 404) msg = "Gist не найден: проверьте ID, либо у токена нет права gist";
+    if (detail) msg += "\nОтвет GitHub: " + detail;
     throw new Error(msg);
   }
   return res.json();
