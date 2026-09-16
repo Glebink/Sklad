@@ -520,7 +520,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Раньше был сплошной счётчик (…v98, v99, v100), с версии v1.0 — этот
 // формат. Версия нигде не сравнивается как число, только показывается и
 // пишется в резервную копию, так что смена формата ничего не ломает.
-const APP_VERSION = "v1.5";
+const APP_VERSION = "v1.6";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -2012,9 +2012,17 @@ document.addEventListener("click", (e) => {
    страницы» (position: fixed) и сами считаем координаты — обрезать её
    тогда физически нечем. */
 function placeRowMenu(panel) {
-  const btn = panel.parentElement;
-  const r = btn.getBoundingClientRect();
-  panel.classList.add("floating");
+  // Панель на время показа переезжает в <body>. Причина: таблицы лежат внутри
+  // .table-scroll с -webkit-overflow-scrolling: touch, а у самой таблицы стоит
+  // overflow: hidden. Safari на iPhone такой контейнер и обрезает вложенное
+  // меню, и рисует его в СВОЁМ слое — поэтому у последней строки раздела
+  // нижняя половина меню оказывалась под таблицей следующего раздела, и никакой
+  // z-index не помогал. В <body> перекрывать и обрезать его нечем.
+  const wrap = panel.parentElement;                 // .menu-wrap с кнопкой «⋮»
+  const r = wrap.getBoundingClientRect();           // координаты — ДО переезда
+  panel._homeWrap = wrap;
+  document.body.appendChild(panel);
+  panel.classList.add("floating", "portaled");
   panel.style.position = "fixed";
   panel.style.top = "0px";
   panel.style.left = "0px";
@@ -2038,9 +2046,17 @@ function placeRowMenu(panel) {
 /* Возвращаем панель в обычное состояние при закрытии, иначе она осталась бы
    висеть в углу экрана. */
 function resetRowMenu(panel) {
-  panel.classList.remove("floating", "drop-up");
+  panel.classList.remove("floating", "drop-up", "portaled");
   panel.style.position = "";
   panel.style.top = panel.style.left = panel.style.bottom = panel.style.right = "";
+  const home = panel._homeWrap;
+  panel._homeWrap = null;
+  if (!home) return;
+  // Таблицу могли перерисовать, пока меню было открыто (пришли данные с
+  // сервера, сменилась сортировка) — тогда возвращать панель некуда, и она
+  // осталась бы висеть поверх страницы. Такую просто убираем.
+  if (home.isConnected) home.appendChild(panel);
+  else panel.remove();
 }
 /* Общая для «Склада» и «1С»: закрывает все открытые меню строк заданного
    класса, кроме `except` (обычно — только что открытое). */
@@ -2059,6 +2075,39 @@ function toggleRowMenu(btn, panelClass, closeAllFn) {
   panel.classList.toggle("open", willOpen);
   if (willOpen) placeRowMenu(panel); else resetRowMenu(panel);
 }
+/* Действия строки «Склада» вынесены отдельно: их запускает и обработчик
+   таблицы, и обработчик меню, вынесенного в <body> (см. placeRowMenu) —
+   до таблицы клик оттуда уже не доходит. */
+function runWhRowAction(section, index, btn) {
+  if (btn.classList.contains("wh-del")) {
+    openConfirmWarehouse(section, index);
+  } else if (btn.classList.contains("wh-edit")) {
+    openWhEdit(section, index);
+  } else if (btn.classList.contains("wh-history")) {
+    openHistory(section, warehouse[section][index]);
+  } else if (btn.classList.contains("wh-print")) {
+    printWarehouseLabels(warehouse[section][index]);
+  }
+}
+/* Клик по кнопке внутри вынесенного меню. Ловим на перехвате, чтобы сработать
+   раньше общего «клик мимо меню — закрыть»: то закрытие возвращает панель в
+   таблицу и сняло бы с неё классы до того, как мы прочитали, что нажали. */
+document.addEventListener("click", (e) => {
+  const panel = e.target.closest(".menu-panel.portaled");
+  if (!panel) return;
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const section = btn.dataset.section;
+  const index = parseInt(btn.dataset.index, 10);
+  if (panel.classList.contains("wh-menu-panel")) {
+    closeAllWhMenus();
+    runWhRowAction(section, index, btn);
+  } else {
+    closeAllOcMenus();
+    runOcRowAction(section, index, btn);
+  }
+}, true);
+
 function handleWarehouseClick(e) {
   const section = e.currentTarget.id.replace("wh-body-", "");
   const btn = e.target.closest("button");
@@ -2070,15 +2119,7 @@ function handleWarehouseClick(e) {
       return;
     }
     closeAllWhMenus();
-    if (btn.classList.contains("wh-del")) {
-      openConfirmWarehouse(section, index);
-    } else if (btn.classList.contains("wh-edit")) {
-      openWhEdit(section, index);
-    } else if (btn.classList.contains("wh-history")) {
-      openHistory(section, warehouse[section][index]);
-    } else if (btn.classList.contains("wh-print")) {
-      printWarehouseLabels(warehouse[section][index]);
-    }
+    runWhRowAction(section, index, btn);
     return;
   }
   const link = e.target.closest(".alt-link");
@@ -2103,8 +2144,11 @@ function handleWarehouseClick(e) {
 document.getElementById("wh-body-parts").addEventListener("click", handleWarehouseClick);
 document.getElementById("wh-body-consumables").addEventListener("click", handleWarehouseClick);
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".wh-menu-wrap")) closeAllWhMenus();
-  if (!e.target.closest(".oc-menu-wrap")) closeAllOcMenus();
+  // Само меню теперь лежит в <body>, а не внутри .menu-wrap, поэтому проверяем
+  // и его: иначе промах мимо кнопки внутри меню считался бы «кликом мимо» и
+  // закрывал бы его.
+  if (!e.target.closest(".wh-menu-wrap") && !e.target.closest(".wh-menu-panel")) closeAllWhMenus();
+  if (!e.target.closest(".oc-menu-wrap") && !e.target.closest(".oc-menu-panel")) closeAllOcMenus();
 });
 
 function handleWarehouseQtyEdit(e) {
@@ -3906,6 +3950,18 @@ document.addEventListener("click", (e) => {
 
 /* --- клики по строкам 1C --- */
 function closeAllOcMenus(except) { closeAllRowMenus("oc-menu-panel", except); }
+/* Парная к runWhRowAction — см. комментарий там. */
+function runOcRowAction(section, index, btn) {
+  if (btn.classList.contains("oc-del")) {
+    openConfirmOneC(section, index);
+  } else if (btn.classList.contains("oc-edit")) {
+    openOcEdit(section, index);
+  } else if (btn.classList.contains("oc-addwh")) {
+    openOcToWh(section, index);
+  } else if (btn.classList.contains("oc-transfer")) {
+    addOcItemToTransfer(section, index);
+  }
+}
 function handleOneCClick(e) {
   const section = e.currentTarget.id.replace("oc-body-", "");
   const btn = e.target.closest("button");
@@ -3917,15 +3973,7 @@ function handleOneCClick(e) {
       return;
     }
     closeAllOcMenus();
-    if (btn.classList.contains("oc-del")) {
-      openConfirmOneC(section, index);
-    } else if (btn.classList.contains("oc-edit")) {
-      openOcEdit(section, index);
-    } else if (btn.classList.contains("oc-addwh")) {
-      openOcToWh(section, index);
-    } else if (btn.classList.contains("oc-transfer")) {
-      addOcItemToTransfer(section, index);
-    }
+    runOcRowAction(section, index, btn);
     return;
   }
   const link = e.target.closest(".alt-link");
