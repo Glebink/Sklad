@@ -520,7 +520,7 @@ document.addEventListener("pointerup", handleTabPress);   // страховка 
 // Раньше был сплошной счётчик (…v98, v99, v100), с версии v1.0 — этот
 // формат. Версия нигде не сравнивается как число, только показывается и
 // пишется в резервную копию, так что смена формата ничего не ломает.
-const APP_VERSION = "v1.4";
+const APP_VERSION = "v1.5";
 {
   const el = document.getElementById("appVersionBadge");
   if (el) el.textContent = APP_VERSION;
@@ -1265,7 +1265,7 @@ function searchStore(store, query) {
   });
   return results.slice(0, 8);
 }
-function renderSuggestionsFrom(box, query, onPick, store, emptyText) {
+function renderSuggestionsFrom(box, query, onPick, store, emptyText, opts) {
   const results = searchStore(store, query);
   if (!query.trim()) { box.classList.remove("open"); box.innerHTML = ""; return; }
   if (results.length === 0) {
@@ -1273,11 +1273,23 @@ function renderSuggestionsFrom(box, query, onPick, store, emptyText) {
     box.classList.add("open");
     return;
   }
-  box.innerHTML = results.map((r, idx) =>
-    `<div class="suggest-item" data-idx="${idx}">
+  const withOcQty = !!(opts && opts.ocQty);
+  box.innerHTML = results.map((r, idx) => {
+    // Остаток из «1С» в конце строки: сразу видно, есть ли деталь в наличии,
+    // не выходя из формы добавления. Позиции без пары в «1С» остатка не
+    // получают — там пусто, а не ноль: это разные вещи.
+    let ocQty = "";
+    if (withOcQty && r.code) {
+      const ocInfo = oneCInfoFor(r.code);
+      if (ocInfo) ocQty = `<span class="suggest-oc-qty">${ocInfo.qty}</span>`;
+    }
+    // Остаток стоит ПЕРВЫМ в разметке: он прижат к правому краю через float,
+    // а float цепляется за ту строку, в которой объявлен. Иначе у названий,
+    // переносящихся на две строки, число уезжало бы на вторую.
+    return `<div class="suggest-item" data-idx="${idx}">${ocQty}
        <span class="code">${escapeHtml(r.code || "—")}</span> — ${escapeHtml(r.name)}${r.model ? `<span class="suggest-model">${escapeHtml(r.model)}</span>` : ""}
-     </div>`
-  ).join("");
+     </div>`;
+  }).join("");
   box.classList.add("open");
   Array.from(box.querySelectorAll(".suggest-item")).forEach((el) => {
     el.addEventListener("click", () => {
@@ -1287,9 +1299,9 @@ function renderSuggestionsFrom(box, query, onPick, store, emptyText) {
     });
   });
 }
-function renderSuggestions(box, query, onPick) {
+function renderSuggestions(box, query, onPick, opts) {
   renderSuggestionsFrom(box, query, onPick, warehouse,
-    "Совпадений на складе нет — можно добавить как новую позицию без кода.");
+    "Совпадений на складе нет — можно добавить как новую позицию без кода.", opts);
 }
 
 /* --- Добавление новой позиции в дневной список --- */
@@ -1366,7 +1378,7 @@ newItemInput.addEventListener("input", () => {
     document.getElementById("newItemSection").value = r.section;
     fitSectionSelectWidth();   // раздел мог смениться — подгоняем ширину
     updateNewItemClear();
-  });
+  }, { ocQty: true });
 });
 
 registerSuggestZone(addSuggestBox, [newItemInput]);

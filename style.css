@@ -493,6 +493,14 @@
     margin-left: 6px;
     white-space: nowrap;
   }
+  /* Остаток из «1С» в конце строки подсказки: серым и тем же размером, что и
+     название (модель рядом — мельче, это разные подписи). */
+  .suggest-item .suggest-oc-qty {
+    float: right;
+    margin-left: 10px;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+  }
   .suggest-empty { padding: 9px 12px; font-size: 13px; color: #94a3b8; }
 
   .app-header .date-picker.hidden { visibility: hidden; }
